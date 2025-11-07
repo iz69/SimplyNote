@@ -1,0 +1,16 @@
+services:
+  simplynote:
+    build: .
+    container_name: simplynote
+    ports:
+      - "18888:8000"
+    volumes:
+#      - ./app:/app
+      - ./config:/config
+      - ./data:/data
+    environment:
+      ADMIN_USER: "msktoge"
+      ADMIN_PASS: "bassist1"
+
+volumes:
+  simplynote-data:

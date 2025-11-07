@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+pydantic
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+bcrypt==4.1.2
