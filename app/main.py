@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File, Form
+from fastapi.staticfiles import StaticFiles
 from .database import init_db, get_connection
 from .models import NoteCreate, NoteUpdate, NoteOut
 from .auth import hash_password, router as auth_router, oauth2_scheme
@@ -7,24 +8,20 @@ from datetime import datetime
 import os, logging, shutil
 
 # ------------------------------------------------------------
-# load Config
-# ------------------------------------------------------------
-config = load_config()
-
-# ------------------------------------------------------------
-# Setting log
-# ------------------------------------------------------------
-logging.basicConfig(level=config["logging"]["level"])
-logger = logging.getLogger("simplynote")
-
-# ------------------------------------------------------------
 # FastAPI
 # ------------------------------------------------------------
 app = FastAPI(title="SimplyNote API")
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 
 # ------------------------------------------------------------
-# Middleware
+# 設定・ログ
+# ------------------------------------------------------------
+config = load_config()
+logging.basicConfig(level=config["logging"]["level"])
+logger = logging.getLogger("simplynote")
+
+# ------------------------------------------------------------
+# Middleware (for DEBUG)
 # ------------------------------------------------------------
 @app.middleware("http")
 async def debug_request(request: Request, call_next):
@@ -40,6 +37,23 @@ async def set_root_path_from_proxy(request: Request, call_next):
         request.scope["root_path"] = prefix.rstrip("/")
     return await call_next(request)
 
+# ------------------------------------------------------------
+# React Build 配信設定
+# ------------------------------------------------------------
+BASE_PATH = os.getenv("BASE_PATH", "/")
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "../ui/dist")
+
+if os.path.exists(FRONTEND_DIR):
+    mount_path = BASE_PATH.rstrip("/") or "/"
+    if mount_path != "/":
+        app.mount(mount_path, StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+    else:
+        from fastapi.responses import FileResponse
+
+        @app.get("/{full_path:path}")
+        async def serve_spa(full_path: str):
+            index_path = os.path.join(FRONTEND_DIR, "index.html")
+            return FileResponse(index_path)
 
 # ------------------------------------------------------------
 # Startup
