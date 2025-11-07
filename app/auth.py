@@ -16,10 +16,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 def hash_password(password: str):
     return pwd_context.hash(password)
 
-
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
-
 
 def authenticate_user(username: str, password: str):
     conn = get_connection()

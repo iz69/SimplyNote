@@ -1,3 +1,6 @@
+## 事前に手動のコンパイル必要
+## cd ui && npm run build
+
 services:
   simplynote:
     build: .
@@ -8,12 +11,12 @@ services:
 #      - ./app:/app
       - ./config:/config
       - ./data:/data
-      - ./ui/dist:/app/ui/dist
     environment:
-      ADMIN_USER: "msktoge"
-      ADMIN_PASS: "bassist1"
-      BASE_PATH: "/simplynote"
-  
+      - ADMIN_USER=msktoge
+      - ADMIN_PASS=bassist1
+      - BASE_PATH=/simplynote
+
+
   ## build済みの本番環境では不要
   ## その場合nginxのproxy_passも18888に変更する
   simplynote-ui:
@@ -25,10 +28,13 @@ services:
 #    command: sh -c "npm install && npm run dev"
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
 #    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --strictPort false"
+#    command: sh -c "npm install && npm run build"                      # 本番用？
     ports:
-      - "5173:5173"
+      - "15173:5173"
     environment:
-      - VITE_API_URL=http://localhost:18888
+#      - VITE_API_URL=http://localhost:8000
+#      - VITE_API_URL=/api
+      - VITE_API_URL=/simplynote/api
       - VITE_BASE_PATH=/simplynote
     depends_on:
       - simplynote

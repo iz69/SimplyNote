@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File, Form
-from fastapi.staticfiles import StaticFiles
+#from fastapi.staticfiles import StaticFiles
 from .database import init_db, get_connection
 from .models import NoteCreate, NoteUpdate, NoteOut
 from .auth import hash_password, router as auth_router, oauth2_scheme
@@ -23,9 +23,26 @@ logger = logging.getLogger("simplynote")
 # ------------------------------------------------------------
 # Middleware (for DEBUG)
 # ------------------------------------------------------------
+#from fastapi.middleware.cors import CORSMiddleware
+#app.add_middleware(
+#    CORSMiddleware,
+#    allow_origins=["*"],  # 開発中は全許可。公開時はドメイン限定してOK
+#    allow_credentials=True,
+#    allow_methods=["*"],
+#    allow_headers=["*"],
+#)
+
+
 @app.middleware("http")
 async def debug_request(request: Request, call_next):
-    logger.info(f"=== Request {request.method} {request.url.path} ===")
+    logger.info(f"=== URL DEBUG INFO ===")
+    logger.info(f"=== method     {request.method}")
+    logger.info(f"=== url.path   {request.url.path}")
+    logger.info(f"=== url.query  {request.url.query}")
+    logger.info(f"=== base_url   {request.base_url}")
+    logger.info(f"=== x-forwarded-prefix {request.headers.get('x-forwarded-prefix')}")
+    logger.info(f"=== scope.root_path {request.scope.get('root_path')}")
+    logger.info(f"=== scope.path {request.scope.get('path')}")
     response = await call_next(request)
     return response
 
@@ -38,23 +55,35 @@ async def set_root_path_from_proxy(request: Request, call_next):
     return await call_next(request)
 
 # ------------------------------------------------------------
-# React Build 配信設定
+# Vite (React) Build 配信設定
 # ------------------------------------------------------------
-BASE_PATH = os.getenv("BASE_PATH", "/")
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "../ui/dist")
+#from fastapi.responses import FileResponse
 
-if os.path.exists(FRONTEND_DIR):
-    mount_path = BASE_PATH.rstrip("/") or "/"
-    if mount_path != "/":
-        app.mount(mount_path, StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
-    else:
-        from fastapi.responses import FileResponse
+## FRONTEND_DIR = "/app/ui/dist"
+## BASE_PATH = os.getenv("BASE_PATH", "/")
+ 
+## if os.path.exists(FRONTEND_DIR):
+##     
+##     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+##  
+##     @app.get("/{full_path:path}", include_in_schema=False)
+##     async def serve_spa(full_path: str):
+##         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+#
+#FRONTEND_DIR = "/app/ui/dist"
+#BASE_PATH = os.getenv("BASE_PATH", "").rstrip("/")
+#
+#if os.path.exists(FRONTEND_DIR):
+#    print(f"📁 Mounting frontend at: / (BASE_PATH={BASE_PATH})")
+#
+#    # mount は常に "/" にする
+#    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+#
+#    @app.get("/{full_path:path}", include_in_schema=False)
+#    async def serve_spa(full_path: str):
+#        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
-        @app.get("/{full_path:path}")
-        async def serve_spa(full_path: str):
-            index_path = os.path.join(FRONTEND_DIR, "index.html")
-            return FileResponse(index_path)
-
+ 
 # ------------------------------------------------------------
 # Startup
 # ------------------------------------------------------------
@@ -260,3 +289,121 @@ def upload_attachment(note_id: int, file: UploadFile = File(...), token: str = D
 
 #### 未実装
 #### @app.get("/notes/{note_id}/attachments)
+
+
+
+
+# ------------------------------------------------------------
+# Vite (React) Build 配信設定
+# ------------------------------------------------------------
+#FRONTEND_DIR = "/app/ui/dist"
+
+#if os.path.exists(FRONTEND_DIR):
+#    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+#
+#    @app.get("/{full_path:path}", include_in_schema=False)
+#    async def serve_spa(full_path: str):
+#        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+
+#from fastapi.responses import FileResponse
+#from fastapi.staticfiles import StaticFiles
+#import os
+#
+#FRONTEND_DIR = "/app/ui/dist"
+#
+#if os.path.exists(FRONTEND_DIR):
+#    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+#
+#    @app.get("/{full_path:path}", include_in_schema=False)
+#    async def serve_spa(full_path: str):
+#        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+#
+#
+#print("📁 FRONTEND_DIR contents:", os.listdir(FRONTEND_DIR))
+#print("📁 FRONTEND_DIR/assets:", os.listdir(os.path.join(FRONTEND_DIR, "assets")))
+#
+## assets 配信用
+#app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")), name="assets")
+#
+# SPAキャッチオール
+#@app.get("/{full_path:path}", include_in_schema=False)
+#async def serve_spa(full_path: str):
+#    index_file = os.path.join(FRONTEND_DIR, "index.html")
+#    return FileResponse(index_file)
+#
+#
+#
+#import types
+#
+## class PatchedStaticFiles(StaticFiles):
+##     async def __call__(self, scope, receive, send):
+##         # root_pathを完全無効化してStarletteの挙動を正す
+##         if scope.get("root_path"):
+##             scope = dict(scope)
+##             scope["root_path"] = ""
+##         return await super().__call__(scope, receive, send)
+## 
+## 
+## static_dir = os.path.join(FRONTEND_DIR, "assets")
+## print("📂 StaticFiles path =", static_dir, "exists:", os.path.exists(static_dir))
+## 
+## 
+## # assets 配信
+## app.mount(
+##     "/assets",
+##     PatchedStaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")),
+##     name="assets",
+## )
+## 
+## # SPA キャッチオール
+## @app.get("/{full_path:path}", include_in_schema=False)
+## async def serve_spa(full_path: str):
+##     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+## 
+
+
+
+
+## # root_path補正を無効化するStaticFiles
+## class PatchedStaticFiles(StaticFiles):
+##     async def __call__(self, scope, receive, send):
+##         if scope.get("root_path"):
+##             scope = dict(scope)
+##             scope["root_path"] = ""
+##         return await super().__call__(scope, receive, send)
+
+#class PatchedStaticFiles(StaticFiles):
+#    async def get_response(self, path, scope):
+#        scope = dict(scope)
+#        scope["root_path"] = ""  # ← これを必ず上書き
+#        return await super().get_response(path, scope)
+
+## # dist全体を "/" にマウント（assetsもindex.htmlもここに含まれる）
+## app.mount("/", PatchedStaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+## 
+## # React用キャッチオール（万一のfallback）
+## ##@app.get("/{full_path:path}", include_in_schema=False)
+## ##async def serve_spa(full_path: str):
+## ##    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+## 
+## 
+## @app.get("/{full_path:path}", include_in_schema=False)
+## async def serve_spa(full_path: str):
+##     # 静的ファイル以外は全部 index.html を返す
+##     if full_path.startswith("assets/"):
+##         return FileResponse(os.path.join(FRONTEND_DIR, full_path))
+##     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+
+#app.mount(
+#    "/assets",
+#    PatchedStaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")),
+#    name="assets",
+#)
+#
+## SPAキャッチオール
+#@app.get("/{full_path:path}", include_in_schema=False)
+#async def serve_spa(full_path: str):
+#    # 静的ファイル以外はすべてindex.htmlを返す
+#    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
