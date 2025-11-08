@@ -59,29 +59,17 @@ logger = logging.getLogger("simplynote")
 # ------------------------------------------------------------
 @app.middleware("http")
 async def debug_request(request: Request, call_next):
-    logger.info(f"=== URL DEBUG INFO ===")
-    logger.info(f"=== method     {request.method}")
-    logger.info(f"=== url.path   {request.url.path}")
-    logger.info(f"=== url.query  {request.url.query}")
-    logger.info(f"=== base_url   {request.base_url}")
-    logger.info(f"=== x-forwarded-prefix {request.headers.get('x-forwarded-prefix')}")
-    logger.info(f"=== scope.root_path {request.scope.get('root_path')}")
-    logger.info(f"=== scope.path {request.scope.get('path')}")
-    logger.info(f"=== BASE_PATH  {BASE_PATH}")
+#    logger.info(f"=== URL DEBUG INFO ===")
+#    logger.info(f"=== method     {request.method}")
+#    logger.info(f"=== url.path   {request.url.path}")
+#    logger.info(f"=== url.query  {request.url.query}")
+#    logger.info(f"=== base_url   {request.base_url}")
+#    logger.info(f"=== x-forwarded-prefix {request.headers.get('x-forwarded-prefix')}")
+#    logger.info(f"=== scope.root_path {request.scope.get('root_path')}")
+#    logger.info(f"=== scope.path {request.scope.get('path')}")
+#    logger.info(f"=== BASE_PATH  {BASE_PATH}")
     response = await call_next(request)
     return response
-
-
-#####
-@app.middleware("http")
-async def debug_static_paths(request, call_next):
-    global upload_dir
-    if "/files/" in request.url.path:
-        logger.info(f"##### Static request path: {request.url.path}")
-    response = await call_next(request)
-    return response
-
-
 
 # ------------------------------------------------------------
 # Startup
@@ -178,13 +166,6 @@ def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(
 
     conn.close()
     return notes
-
-
-
-
-
-
-
 
 
 @app.get("/notes/{note_id}", response_model=NoteOut)

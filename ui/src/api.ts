@@ -16,7 +16,6 @@ export interface Note {
 }
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
-console.log("🧭 App.tsx API_URL =", API_URL);
 
 const authHeaders = (token: string) => ({
   Authorization: `Bearer ${token}`,
@@ -109,11 +108,6 @@ export async function deleteAttachment(
 
 // -------------------------
 
-export interface Tag {
-  name: string;
-  note_count?: number;
-}
-
 // ノートにタグを追加
 export async function addTag(
   token: string,
@@ -131,7 +125,7 @@ export async function addTag(
   if (res.status === 401) throw new Error("unauthorized");
   if (!res.ok) throw new Error("add_tag_error");
   const data = await res.json();
-  return data.tags; // バックエンド側の返却 {"note_id":1,"tags":["日記","仕事"]} に対応
+  return data.tags;                      // バックエンド側の返却 {"note_id":1,"tags":["日記","仕事"]} に対応
 }
 
 // ノートからタグを削除
@@ -148,6 +142,12 @@ export async function removeTag(
   if (!res.ok) throw new Error("remove_tag_error");
   const data = await res.json();
   return data.tags;
+}
+
+
+export interface Tag {
+  name: string;
+  note_count?: number;
 }
 
 // 全タグ一覧を取得

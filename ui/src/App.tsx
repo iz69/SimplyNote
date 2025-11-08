@@ -7,7 +7,6 @@ import { saveAttachments, deleteAttachment, getAllTags, addTag, removeTag } from
 export default function App() {
 
   const BASE_PATH = import.meta.env.VITE_BASE_PATH || "";
-  console.log("🧭 App.tsx BASE_PATH =", BASE_PATH);
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [selected, setSelected] = useState<Note | null>(null);
@@ -18,7 +17,7 @@ export default function App() {
   const [attachments, setAttachments] = useState([]);     // サーバ上の既存添付ファイル
   const [previewFile, setPreviewFile] = useState<any | null>(null);
 
-  const [tags, setTags] = useState<Tag[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState("");
 
   const handleSelect = (note: Note) => {
@@ -27,7 +26,7 @@ export default function App() {
     setDraft(note.content);
     setDraftFiles([]);
     setAttachments(note.files || []);
-    setTags((note.tags || []).map((name) => ({ name })));
+    setTags(note.tags || []);
   };
 
   // --------------------
@@ -76,8 +75,7 @@ export default function App() {
         setSelected(first);
         setDraft(first.content);
         setAttachments(first.files || []);
-//        setTags(first.tags || []); 
-        setTags((first.tags || []).map((name) => ({ name })));
+        setTags(first.tags || []); 
       }
     } catch (err: any) {
       if (err.message === "unauthorized") {
@@ -94,9 +92,8 @@ export default function App() {
     try {
       const data = await getAllTags(token!);
       // data は [{ name: "仕事", note_count: 3 }, ...]
-      setTags(data); // ← タグ一覧の state にセット（useState で定義しておく）
 
-//alert( data );
+alert(data.map(tag => tag.name).join(", "));
 
     } catch (err: any) {
       if (err.message === "unauthorized") {
@@ -117,7 +114,7 @@ export default function App() {
       setSelected(data[0] || null);
       setDraft(data[0]?.content || "");
       setAttachments(data[0]?.files || []);
-      setTags((data[0]?.tags || []).map((name) => ({ name })));
+      setTags(data[0].tags || []);
 
     } catch (err: any) {
       if (err.message === "unauthorized") {
@@ -149,7 +146,8 @@ export default function App() {
         prev.map((n) => (n.id === updated.id ? updated : n))
       );
       setAttachments(updated.files || []);
-      setTags((updated.tags || []).map((name) => ({ name })));
+//      setTags((updated.tags || []).map((name) => ({ name })));
+      setTags(updated.tags || []);
 
       setDraftFiles([]);
       setIsEditing(false);
@@ -231,8 +229,9 @@ export default function App() {
     if (!tagName.trim()) return;
     try {
       const updatedTags = await addTag(token!, noteId, tagName.trim());
-//      setTags(updatedTags); // 新しいタグリストに更新
-      setTags(updatedTags.map((name) => ({ name })));
+//      setTags(updatedTags.map((name) => ({ name })));
+//      setTags(updatedTags.tags || []);
+      setTags(updatedTags || []);
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
@@ -250,8 +249,9 @@ export default function App() {
   
     try {
       const updatedTags = await removeTag(token!, noteId, tagName);
-//      setTags(updatedTags); // 更新されたタグリストを反映
-      setTags(updatedTags.map((name) => ({ name })));
+//      setTags(updatedTags.map((name) => ({ name })));
+//      setTags(updatedTags.tags || []);
+      setTags(updatedTags || []);
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
@@ -274,7 +274,7 @@ export default function App() {
   // ------------------------------------------------------------
   useEffect(() => {
     fetchNotes();
-    fetchTags();
+//    fetchTags();
   }, []);
 
   // ------------------------------------------------------------
@@ -430,11 +430,11 @@ export default function App() {
         <div className="flex flex-wrap gap-2 mt-2">
           {tags.map((tag) => (
             <span
-              key={tag.name}
+              key={tag}
               className="px-2 py-1 bg-gray-200 rounded cursor-pointer hover:bg-gray-300"
-              onClick={() => handleRemoveTag(selected.id, tag.name)}
+              onClick={() => handleRemoveTag(selected.id, tag)}
             >
-              #{tag.name}
+              #{tag}
             </span>
           ))}
         </div>
@@ -444,12 +444,19 @@ export default function App() {
           type="text"
           value={newTagInput}
           onChange={(e) => setNewTagInput(e.target.value)}
-          onBlur={() => {
-            const value = newTagInput.trim();
-            if (value && selected?.id) {
-              handleAddTag(selected.id, value);
-              setNewTagInput("");
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault(); // フォーム送信防止
+              const value = newTagInput.trim();
+              if (value && selected?.id) {
+                handleAddTag(selected.id, value);
+                setNewTagInput("");
+              }
             }
+          }}
+          onBlur={() => {
+            // フォーカスが外れたらキャンセル（入力だけクリア）
+            setNewTagInput("");
           }}
           placeholder="タグを追加..."
           className="border rounded px-2 py-1 mt-2"
