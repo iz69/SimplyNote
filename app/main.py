@@ -1,17 +1,49 @@
 from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File, Form
-#from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from .database import init_db, get_connection
 from .models import NoteCreate, NoteUpdate, NoteOut
 from .auth import hash_password, router as auth_router, oauth2_scheme
 from .config import load_config
+import os, logging, shutil, uuid
+from pathlib import Path
 from datetime import datetime
-import os, logging, shutil
+
+BASE_PATH = os.getenv("BASE_PATH", "/").rstrip("/") + "/"
+
+# ------------------------------------------------------------
+# Middleware
+# ------------------------------------------------------------
+class RootPathFromXForwardedPrefix:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        headers = dict(scope.get("headers") or [])
+        prefix = None
+        for k, v in headers.items():                # ヘッダーは小文字・バイト列なので注意
+            if k == b"x-forwarded-prefix":
+                prefix = v.decode()
+                break
+        if prefix:
+            scope["root_path"] = prefix             # FastAPI がこれを見てルートを補正する
+        await self.app(scope, receive, send)
 
 # ------------------------------------------------------------
 # FastAPI
 # ------------------------------------------------------------
 app = FastAPI(title="SimplyNote API")
+
+app.add_middleware(RootPathFromXForwardedPrefix)
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # ← 最初はこれでOK（あとで制限可）
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ------------------------------------------------------------
 # 設定・ログ
@@ -20,19 +52,10 @@ config = load_config()
 logging.basicConfig(level=config["logging"]["level"])
 logger = logging.getLogger("simplynote")
 
-# ------------------------------------------------------------
-# Middleware (for DEBUG)
-# ------------------------------------------------------------
-#from fastapi.middleware.cors import CORSMiddleware
-#app.add_middleware(
-#    CORSMiddleware,
-#    allow_origins=["*"],  # 開発中は全許可。公開時はドメイン限定してOK
-#    allow_credentials=True,
-#    allow_methods=["*"],
-#    allow_headers=["*"],
-#)
 
-
+# ------------------------------------------------------------
+# App.Middleware
+# ------------------------------------------------------------
 @app.middleware("http")
 async def debug_request(request: Request, call_next):
     logger.info(f"=== URL DEBUG INFO ===")
@@ -43,47 +66,22 @@ async def debug_request(request: Request, call_next):
     logger.info(f"=== x-forwarded-prefix {request.headers.get('x-forwarded-prefix')}")
     logger.info(f"=== scope.root_path {request.scope.get('root_path')}")
     logger.info(f"=== scope.path {request.scope.get('path')}")
+    logger.info(f"=== BASE_PATH  {BASE_PATH}")
     response = await call_next(request)
     return response
 
 
+#####
 @app.middleware("http")
-async def set_root_path_from_proxy(request: Request, call_next):
-    prefix = request.headers.get("x-forwarded-prefix")
-    if prefix:
-        request.scope["root_path"] = prefix.rstrip("/")
-    return await call_next(request)
+async def debug_static_paths(request, call_next):
+    global upload_dir
+    if "/files/" in request.url.path:
+        logger.info(f"##### Static request path: {request.url.path}")
+    response = await call_next(request)
+    return response
 
-# ------------------------------------------------------------
-# Vite (React) Build 配信設定
-# ------------------------------------------------------------
-#from fastapi.responses import FileResponse
 
-## FRONTEND_DIR = "/app/ui/dist"
-## BASE_PATH = os.getenv("BASE_PATH", "/")
- 
-## if os.path.exists(FRONTEND_DIR):
-##     
-##     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
-##  
-##     @app.get("/{full_path:path}", include_in_schema=False)
-##     async def serve_spa(full_path: str):
-##         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
-#
-#FRONTEND_DIR = "/app/ui/dist"
-#BASE_PATH = os.getenv("BASE_PATH", "").rstrip("/")
-#
-#if os.path.exists(FRONTEND_DIR):
-#    print(f"📁 Mounting frontend at: / (BASE_PATH={BASE_PATH})")
-#
-#    # mount は常に "/" にする
-#    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
-#
-#    @app.get("/{full_path:path}", include_in_schema=False)
-#    async def serve_spa(full_path: str):
-#        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
- 
 # ------------------------------------------------------------
 # Startup
 # ------------------------------------------------------------
@@ -93,8 +91,8 @@ def startup():
     conn = get_connection()
     cur = conn.cursor()
 
-    admin_user = os.getenv("ADMIN_USER", "").strip()
-    admin_pass = os.getenv("ADMIN_PASS", "").strip()[:72]
+    admin_user = os.getenv("ADMIN_USER", "admin").strip()
+    admin_pass = os.getenv("ADMIN_PASS", "password").strip()[:72]
 
     if admin_user and admin_pass:
         cur.execute("SELECT id FROM users WHERE username=?", (admin_user,))
@@ -107,15 +105,22 @@ def startup():
             logger.info(f"✅ Created default admin user: {admin_user}")
 
     conn.close()
-#    os.makedirs("/data/files", exist_ok=True)
-    os.makedirs(config["upload"]["dir"], exist_ok=True)
-    logger.info("📂 File storage initialized: /data/files")
+
+    upload_dir = os.path.abspath(config["upload"]["dir"])
+    os.makedirs(upload_dir, exist_ok=True)
+    logger.info(f"📂 File storage initialized: {upload_dir}")
+
+    app.mount("/files", StaticFiles(directory=upload_dir), name="files")
+
+    for route in app.routes:
+        if hasattr(route, "app") and isinstance(route.app, StaticFiles):
+            logger.info("=== StaticFiles mount  name: {route.name}, path: {route.path}, directory: {route.app.directory}")
 
 # ------------------------------------------------------------
 # Notes CRUD
 # ------------------------------------------------------------
 @app.get("/notes", response_model=list[NoteOut])
-def get_notes(token: str = Depends(oauth2_scheme)):
+def get_notes(request: Request, token: str = Depends(oauth2_scheme)):
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -131,13 +136,36 @@ def get_notes(token: str = Depends(oauth2_scheme)):
     for row in cur.fetchall():
         d = dict(row)
         d["tags"] = d["tags"].split(",") if d["tags"] else []
+
+        cur2 = conn.cursor()
+
+        # 添付ファイルを取得して追加
+        cur2.execute(
+            "SELECT id, filename_original, filename_stored FROM attachments WHERE note_id=?",
+            (d["id"],),
+        )
+        files = [
+            {
+                "id": fid,
+                "filename": fname,
+                 "url": f"{request.base_url}{BASE_PATH}files/{stored}"
+                
+            }
+            for fid, fname, stored in cur2.fetchall()
+        ]
+        cur2.close()
+        d["files"] = files
+
+        logger.info(f"🧾 Note {d['id']} - {len(files)} attachments found")
+
         notes.append(d)
+
     conn.close()
     return notes
 
 
 @app.get("/notes/{note_id}", response_model=NoteOut)
-def get_note(note_id: int,token: str = Depends(oauth2_scheme)):
+def get_note(note_id: int, request: Request, token: str = Depends(oauth2_scheme)):
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -149,17 +177,32 @@ def get_note(note_id: int,token: str = Depends(oauth2_scheme)):
         GROUP BY n.id
     """, (note_id,))
     row = cur.fetchone()
-    conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="Note not found")
 
     d = dict(row)
     d["tags"] = d["tags"].split(",") if d["tags"] else []
+
+    # 添付ファイルを取得して追加
+    cur.execute(
+        "SELECT id, filename_original, filename_stored FROM attachments WHERE note_id=?",
+        (note_id,),
+    )
+    files = [
+        {
+            "id": fid,
+            "filename": fname,
+            "url": f"{request.base_url}{BASE_PATH}files/{stored}"
+        }
+        for fid, fname, stored in cur.fetchall()
+    ]
+    d["files"] = files
+
+    conn.close()
     return d
 
-
 @app.post("/notes", response_model=NoteOut)
-def update_note(note_id: int, note: NoteUpdate, token: str = Depends(oauth2_scheme)):
+def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
     now = datetime.utcnow().isoformat()
     conn = get_connection()
     cur = conn.cursor()
@@ -172,7 +215,7 @@ def update_note(note_id: int, note: NoteUpdate, token: str = Depends(oauth2_sche
     # ノート本体
     cur.execute(
         "INSERT INTO notes (user_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        (user_id, note.title, note.content, now, now),  # FIXME: user_id=1 仮
+        (user_id, note.title, note.content, now, now),
     )
     note_id = cur.lastrowid
 
@@ -192,13 +235,14 @@ def update_note(note_id: int, note: NoteUpdate, token: str = Depends(oauth2_sche
         "title": note.title,
         "content": note.content,
         "tags": note.tags if hasattr(note, "tags") else [],
+        "files": [],
         "created_at": now,
         "updated_at": now,
     }
 
 
 @app.put("/notes/{note_id}", response_model=NoteOut)
-def update_note(note_id: int, note: NoteUpdate,token: str = Depends(oauth2_scheme)):
+def update_note(note_id: int, note: NoteUpdate, request: Request, token: str = Depends(oauth2_scheme)):
 
     now = datetime.utcnow().isoformat()
     conn = get_connection()
@@ -228,6 +272,13 @@ def update_note(note_id: int, note: NoteUpdate,token: str = Depends(oauth2_schem
             tag_id = cur.fetchone()["id"]
             cur.execute("INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)", (note_id, tag_id))
 
+    # 添付ファイル情報を取得
+    cur.execute("SELECT id, filename_original, filename_stored FROM attachments WHERE note_id=?", (note_id,))
+    files = [
+        {"id": fid, "filename": fname, "url": f"{request.base_url}{BASE_PATH}files/{stored}"}
+        for fid, fname, stored in cur.fetchall()
+    ]
+
     conn.commit()
     conn.close()
     return {
@@ -235,175 +286,120 @@ def update_note(note_id: int, note: NoteUpdate,token: str = Depends(oauth2_schem
         "title": note.title,
         "content": note.content,
         "tags": note.tags if hasattr(note, "tags") else [],
+        "files": files,
         "updated_at": now,
     }
-
 
 @app.delete("/notes/{note_id}")
 def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
     conn = get_connection()
     cur = conn.cursor()
+
+    # 添付ファイルパスを取得
+    cur.execute("SELECT filename_stored FROM attachments WHERE note_id=?", (note_id,))
+    files = [row[0] for row in cur.fetchall()]
+
+    # 添付ファイルのDBレコードを削除
+    cur.execute("DELETE FROM attachments WHERE note_id=?", (note_id,))
+
+    # ノート本体を削除
     cur.execute("DELETE FROM notes WHERE id=?", (note_id,))
-    conn.commit()
     deleted = cur.rowcount
+    conn.commit()
     conn.close()
+
+    store_dir = config["upload"]["dir"]
+
+    # 実ファイル削除（DBクローズ後にやる）
+    for filename in files:
+        try:
+            path = os.path.join(config["upload"]["dir"], filename)
+            if os.path.exists(path):
+                os.remove(path)
+        except Exception as e:
+            print(f"⚠️ Failed to remove file {path}: {e}")
+
     if deleted == 0:
         raise HTTPException(status_code=404, detail="Note not found")
-    return {"detail": "Note deleted"}
+
+    return {"detail": "Note and attachments deleted"}
 
 
 @app.post("/notes/{note_id}/attachments")
-def upload_attachment(note_id: int, file: UploadFile = File(...), token: str = Depends(oauth2_scheme)):
+def upload_attachment( note_id: int, request: Request, file: UploadFile = File(...), token: str = Depends(oauth2_scheme),):
+
+    logger = logging.getLogger("attachments!!")
+
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("SELECT id FROM notes WHERE id=?", (note_id,))
     if not cur.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # 設定ファイルからアップロード先と制限値を取得
     upload_dir = config["upload"]["dir"]
     max_size_bytes = config["upload"]["max_size_mb"] * 1024 * 1024
     os.makedirs(upload_dir, exist_ok=True)
 
-    # 一時的にファイルサイズを確認（readして戻す）
+    # ファイル名衝突回避
+    ext = Path(file.filename).suffix
+    safe_name = f"{uuid.uuid4().hex}{ext}"
+    dest_path = os.path.join(upload_dir, safe_name)
+
+    # サイズ制限（簡易チェック）
     file.file.seek(0, os.SEEK_END)
     size = file.file.tell()
     file.file.seek(0)
     if size > max_size_bytes:
         raise HTTPException(status_code=400, detail=f"File exceeds {config['upload']['max_size_mb']}MB limit")
 
-    dest_path = os.path.join(upload_dir, file.filename)
-
+    # 保存
+    file.file.seek(0)
     with open(dest_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # DB登録
     cur.execute(
-        "INSERT INTO attachments (note_id, filename, filepath, uploaded_at) VALUES (?, ?, ?, ?)",
-        (note_id, file.filename, dest_path, datetime.utcnow().isoformat()),
+        """
+        INSERT INTO attachments (note_id, filename_original, filename_stored, uploaded_at)
+        VALUES (?, ?, ?, ?)
+        RETURNING id
+        """,
+        (note_id, file.filename, safe_name, datetime.utcnow().isoformat()),
     )
+    attachment_id = cur.fetchone()[0]
+
     conn.commit()
     conn.close()
 
-    return {"detail": "File uploaded", "filename": file.filename}
+    return {
+        "id": attachment_id,
+        "filename": file.filename,
+        "url": f"{request.base_url}{BASE_PATH}files/{safe_name}",
+    }
 
-#### 未実装
-#### @app.get("/notes/{note_id}/attachments)
+@app.get("/search")
+def search_notes(q: str, token: str = Depends(oauth2_scheme)):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT n.*, GROUP_CONCAT(t.name, ',') AS tags
+        FROM notes n
+        JOIN notes_fts f ON n.id = f.rowid
+        LEFT JOIN note_tags nt ON n.id = nt.note_id
+        LEFT JOIN tags t ON nt.tag_id = t.id
+        WHERE notes_fts MATCH ?
+        GROUP BY n.id
+        ORDER BY rank
+    """, (q,))
+    rows = cur.fetchall()
+    conn.close()
 
+    results = []
+    for row in rows:
+        d = dict(row)
+        d["tags"] = d["tags"].split(",") if d["tags"] else []
+        results.append(d)
 
-
-
-# ------------------------------------------------------------
-# Vite (React) Build 配信設定
-# ------------------------------------------------------------
-#FRONTEND_DIR = "/app/ui/dist"
-
-#if os.path.exists(FRONTEND_DIR):
-#    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
-#
-#    @app.get("/{full_path:path}", include_in_schema=False)
-#    async def serve_spa(full_path: str):
-#        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
-
-
-#from fastapi.responses import FileResponse
-#from fastapi.staticfiles import StaticFiles
-#import os
-#
-#FRONTEND_DIR = "/app/ui/dist"
-#
-#if os.path.exists(FRONTEND_DIR):
-#    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
-#
-#    @app.get("/{full_path:path}", include_in_schema=False)
-#    async def serve_spa(full_path: str):
-#        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
-#
-#
-#print("📁 FRONTEND_DIR contents:", os.listdir(FRONTEND_DIR))
-#print("📁 FRONTEND_DIR/assets:", os.listdir(os.path.join(FRONTEND_DIR, "assets")))
-#
-## assets 配信用
-#app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")), name="assets")
-#
-# SPAキャッチオール
-#@app.get("/{full_path:path}", include_in_schema=False)
-#async def serve_spa(full_path: str):
-#    index_file = os.path.join(FRONTEND_DIR, "index.html")
-#    return FileResponse(index_file)
-#
-#
-#
-#import types
-#
-## class PatchedStaticFiles(StaticFiles):
-##     async def __call__(self, scope, receive, send):
-##         # root_pathを完全無効化してStarletteの挙動を正す
-##         if scope.get("root_path"):
-##             scope = dict(scope)
-##             scope["root_path"] = ""
-##         return await super().__call__(scope, receive, send)
-## 
-## 
-## static_dir = os.path.join(FRONTEND_DIR, "assets")
-## print("📂 StaticFiles path =", static_dir, "exists:", os.path.exists(static_dir))
-## 
-## 
-## # assets 配信
-## app.mount(
-##     "/assets",
-##     PatchedStaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")),
-##     name="assets",
-## )
-## 
-## # SPA キャッチオール
-## @app.get("/{full_path:path}", include_in_schema=False)
-## async def serve_spa(full_path: str):
-##     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
-## 
-
-
-
-
-## # root_path補正を無効化するStaticFiles
-## class PatchedStaticFiles(StaticFiles):
-##     async def __call__(self, scope, receive, send):
-##         if scope.get("root_path"):
-##             scope = dict(scope)
-##             scope["root_path"] = ""
-##         return await super().__call__(scope, receive, send)
-
-#class PatchedStaticFiles(StaticFiles):
-#    async def get_response(self, path, scope):
-#        scope = dict(scope)
-#        scope["root_path"] = ""  # ← これを必ず上書き
-#        return await super().get_response(path, scope)
-
-## # dist全体を "/" にマウント（assetsもindex.htmlもここに含まれる）
-## app.mount("/", PatchedStaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
-## 
-## # React用キャッチオール（万一のfallback）
-## ##@app.get("/{full_path:path}", include_in_schema=False)
-## ##async def serve_spa(full_path: str):
-## ##    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
-## 
-## 
-## @app.get("/{full_path:path}", include_in_schema=False)
-## async def serve_spa(full_path: str):
-##     # 静的ファイル以外は全部 index.html を返す
-##     if full_path.startswith("assets/"):
-##         return FileResponse(os.path.join(FRONTEND_DIR, full_path))
-##     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
-
-
-#app.mount(
-#    "/assets",
-#    PatchedStaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")),
-#    name="assets",
-#)
-#
-## SPAキャッチオール
-#@app.get("/{full_path:path}", include_in_schema=False)
-#async def serve_spa(full_path: str):
-#    # 静的ファイル以外はすべてindex.htmlを返す
-#    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+    return {"results": results}

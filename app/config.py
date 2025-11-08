@@ -1,15 +1,15 @@
 import os, json
 
-CONFIG_PATH = "/config/config.json"
+CONFIG_PATH = "/data/config.json"
 
 DEFAULT_CONFIG = {
     "database": {
-        "type": "sqlite",           # 将来 "postgres", "mysql" などに変更可能
+        "type": "sqlite",                # 将来 "postgres", "mysql" などに変更可能
         "path": "/data/simplynote.db"
     },
     "user_mode": "single",               # "single" or "multi"
     "upload": {
-        "max_size_mb": 10,
+        "max_size_mb": 50,
         "dir": "/data/files"
     },
     "logging": {
@@ -18,7 +18,8 @@ DEFAULT_CONFIG = {
 }
 
 def load_config():
-    os.makedirs("/config", exist_ok=True)
+#    os.makedirs("/config", exist_ok=True)
+    os.makedirs("/data", exist_ok=True)
 
     if not os.path.exists(CONFIG_PATH):
         with open(CONFIG_PATH, "w") as f:

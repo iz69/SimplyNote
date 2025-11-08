@@ -37,6 +37,7 @@ export default defineConfig(({ mode }) => {
         protocol: 'wss',
         path: basePath,
       },
+/*
       proxy: {
         [`${basePath}api`]: {
           target: 'http://simplynote:8000',
@@ -44,6 +45,7 @@ export default defineConfig(({ mode }) => {
           rewrite: (path) => path.replace(new RegExp(`^${basePath}api`), ''),
         },
       },
+*/
     },
   }
 })

@@ -3,9 +3,6 @@ import os
 from datetime import datetime
 from .config import load_config
 
-# ------------------------------------------------------------
-# 設定ファイルからデータベース設定を読み込み
-# ------------------------------------------------------------
 config = load_config()
 
 if config["database"]["type"] == "sqlite":
@@ -65,11 +62,43 @@ def init_db():
     CREATE TABLE IF NOT EXISTS attachments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         note_id INTEGER NOT NULL,
-        filename TEXT NOT NULL,
-        filepath TEXT NOT NULL,
+        filename_original TEXT NOT NULL,
+        file_name_stored TEXT NOT NULL,
         uploaded_at TEXT NOT NULL,
         FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
     )
+    """)
+
+    # -----------------------------
+
+    cur.execute("""
+    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
+        title,
+        content,
+        content='notes',
+        content_rowid='id'
+    )
+    """)
+
+    cur.execute("""
+    CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
+        INSERT INTO notes_fts(rowid, title, content)
+        VALUES (new.id, new.title, new.content);
+    END;
+    """)
+
+    cur.execute("""
+    CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+        DELETE FROM notes_fts WHERE rowid = old.id;
+    END;
+    """)
+
+    cur.execute("""
+    CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
+        DELETE FROM notes_fts WHERE rowid = old.id;
+        INSERT INTO notes_fts(rowid, title, content)
+        VALUES (new.id, new.title, new.content);
+    END;
     """)
 
     conn.commit()

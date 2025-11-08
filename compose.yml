@@ -2,9 +2,10 @@
 ## cd ui && npm run build
 
 services:
-  simplynote:
+
+  simplynote-api:
     build: .
-    container_name: simplynote
+    container_name: simplynote-api
     ports:
       - "18888:8000"
     volumes:
@@ -14,7 +15,7 @@ services:
     environment:
       - ADMIN_USER=msktoge
       - ADMIN_PASS=bassist1
-      - BASE_PATH=/simplynote
+      - BASE_PATH=/simplynote-api
 
 
   ## build済みの本番環境では不要
@@ -25,17 +26,13 @@ services:
     working_dir: /ui
     volumes:
       - ./ui:/ui
-#    command: sh -c "npm install && npm run dev"
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
-#    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --strictPort false"
 #    command: sh -c "npm install && npm run build"                      # 本番用？
     ports:
       - "15173:5173"
     environment:
-#      - VITE_API_URL=http://localhost:8000
-#      - VITE_API_URL=/api
-      - VITE_API_URL=/simplynote/api
       - VITE_BASE_PATH=/simplynote
+      - VITE_API_URL=/simplynote-api
     depends_on:
-      - simplynote
+      - simplynote-api
 
