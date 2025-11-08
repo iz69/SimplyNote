@@ -184,11 +184,10 @@ export async function getNoteDetail(token: string, id: number): Promise<Note> {
   return res.json();
 }
 
-export async function saveNoteWithAttachments(
+export async function saveNote(
   token: string,
   selected: Note | null,
   draft: string,
-  draftFiles: File[]
 ): Promise<Note> {
   let note: Note;
 
@@ -206,17 +205,26 @@ export async function saveNoteWithAttachments(
     });
   }
 
-  // 添付ファイルアップロード
-  if (draftFiles.length > 0) {
-    for (const f of draftFiles) {
-      await uploadAttachment(token, note.id, f);
-    }
-  }
-
   // ノートを再取得して返す
   const refreshed = await getNoteDetail(token, note.id);
   return refreshed;
 }
 
+export async function saveAttachments(
+  token: string,
+  noteId: number,
+  draftFiles: File[]
+): Promise<Note> {
+
+  if( draftFiles.length === 0 ) { return; }
+
+  for (const f of draftFiles) {
+    await uploadAttachment(token, noteId, f);
+  }
+
+  // ノートを再取得して返す
+  const refreshed = await getNoteDetail(token, noteId);
+  return refreshed;
+}
 
 

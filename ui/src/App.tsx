@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getNotes, createNote, updateNote, deleteNote, saveNoteWithAttachments } from "./api";
-import { deleteAttachment, getAllTags, addTag, removeTag } from "./api";
+import { getNotes, createNote, updateNote, deleteNote, saveNote } from "./api";
+import { saveAttachments, deleteAttachment, getAllTags, addTag, removeTag } from "./api";
 
 export default function App() {
 
@@ -16,6 +16,7 @@ export default function App() {
 
   const [draftFiles, setDraftFiles] = useState([]);       // 新しく追加するファイル
   const [attachments, setAttachments] = useState([]);     // サーバ上の既存添付ファイル
+  const [previewFile, setPreviewFile] = useState<any | null>(null);
 
   const [tags, setTags] = useState<Tag[]>([]);
   const [newTagInput, setNewTagInput] = useState("");
@@ -116,7 +117,8 @@ export default function App() {
       setSelected(data[0] || null);
       setDraft(data[0]?.content || "");
       setAttachments(data[0]?.files || []);
-      setTags(data[0].tags || []); 
+      setTags((data[0]?.tags || []).map((name) => ({ name })));
+
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
@@ -135,28 +137,23 @@ export default function App() {
     setIsEditing(true);
   };
  
-  // 保存（新規 or 更新を自動判定）
+  // 保存
   const handleSave = async () => {
 
     try {
 
-      const refreshed = await saveNoteWithAttachments(
-        token!,
-        selected,
-        draft,
-        draftFiles
-      );
+      const updated = await saveNote( token!, selected, draft);
   
-      // 楽観更新
+      setSelected(updated);
       setNotes((prev) =>
-        prev.map((n) => (n.id === refreshed.id ? refreshed : n))
+        prev.map((n) => (n.id === updated.id ? updated : n))
       );
+      setAttachments(updated.files || []);
+      setTags((updated.tags || []).map((name) => ({ name })));
 
-      setSelected(refreshed);
-      setAttachments(refreshed.files || []);
       setDraftFiles([]);
       setIsEditing(false);
-      setTags(refreshed.tags || []); 
+
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
@@ -189,6 +186,29 @@ export default function App() {
     }
   };
 
+  // 添付ファイル保存
+  const handleSaveAttachment = async () => {
+
+    if (!selected?.id || draftFiles.length === 0) return;
+
+    try {
+
+      const updated = await saveAttachments( token!, selected.id, draftFiles);
+      
+      setDraftFiles([]);
+      setAttachments(updated.files || []);
+
+    } catch (err: any) {
+      if (err.message === "unauthorized") {
+        localStorage.removeItem("token");
+        window.location.href = `${BASE_PATH}/login`;
+      } else {
+        console.error(err);
+        alert("保存に失敗しました。");
+      }
+    }
+  };
+  
   // 添付ファイル削除
   const handleDeleteAttachment = async (attachmentId: number, filename: string) => {
     if (!confirm(`「${filename}」を削除しますか？`)) return;
@@ -301,12 +321,17 @@ export default function App() {
         </div>
 
         {/* 本文 */}
-        <div className="flex-1 p-4 overflow-y-auto">
+        <div
+          className="flex-1 p-4 overflow-y-auto"
+          onClick={(e) => {
+            // textareaがまだ出ていないときだけ編集開始
+            if (!isEditing && selected) {
+              setIsEditing(true);
+            }
+          }} >
+
           {!isEditing ? (
-            <div 
-              className="prose max-w-none whitespace-pre-wrap"
-              onClick={() => setIsEditing(true)} // クリックで編集開始
-            >
+            <div className="prose max-w-none whitespace-pre-wrap">
               <ReactMarkdown remarkPlugins={[[remarkGfm, { breaks: true }]]}>
                 {(selected ? selected.content : "").replace(/\r\n/g, "\n")}
               </ReactMarkdown>
@@ -316,63 +341,88 @@ export default function App() {
               className="w-full h-full border rounded p-2 focus:outline-none"
               value={draft}
               onChange={handleChange}
+              onBlur={() => {
+                setIsEditing(false);
+                handleSave();                            // フォーカスが外れたとき自動保存
+              }}
               placeholder="ここにノートを書き始めましょう..."
               autoFocus
             />
           )}
         </div>
 
-            {/*
-              onBlur={() => {
-                setIsEditing(false);
-                handleSave(); // フォーカスが外れたとき自動保存
-              }}
-            */}
 
         {/* 添付ファイル（本文の下・フッターの上） */}
         <div className="px-4 py-3 border-t bg-gray-50">
           <div className="font-semibold text-sm mb-1">添付ファイル</div>
 
-          {!isEditing ? (
-            attachments?.length > 0 ? (
-              <ul className="list-disc list-inside text-sm">
-                {attachments.map((f) => (
+          {attachments?.length > 0 ? (
+            <ul className="list-disc list-inside text-sm">
+              {attachments.map((f) => (
+                <li key={f.id} className="flex items-center justify-between">
+                  {/*
+                  <a
+                    href={f.url}
+                    target="_blank"
+                    className="text-blue-600 underline break-all"
+                  >
+                    {f.filename}
+                  </a>
+                  */}
 
-                  <li key={f.id} className="flex items-center justify-between">
-                    <a href={f.url} target="_blank" className="text-blue-600 underline break-all">
-                      {f.filename}
-                    </a>
-                    <button
-                      onClick={() => handleDeleteAttachment(f.id, f.filename)}
-                      className="ml-2 text-red-500 hover:text-red-700"
-                      title="削除"
-                    >
-                      🗑️
-                    </button>
-                  </li>
+                  <button
+                    onClick={() => setPreviewFile(f)}
+                    className="text-blue-600 underline break-all text-left hover:text-blue-800" >
+                    {f.filename}
+                  </button>
 
-                ))}
-              </ul>
-            ) : (
-              <div className="text-sm text-gray-400">添付なし</div>
-            )
+                  <button
+                    onClick={() => handleDeleteAttachment(f.id, f.filename)}
+                    className="ml-2 text-red-500 hover:text-red-700"
+                    title="削除" >
+                    🗑️
+                  </button>
+                </li>
+              ))}
+            </ul>
           ) : (
-            <div>
-              <input
-                type="file"
-                multiple
-                onChange={(e) => setDraftFiles(Array.from(e.target.files))}
-                className="text-sm"
-              />
-              {draftFiles.length > 0 && (
-                <ul className="list-disc list-inside text-sm mt-2">
+            <div className="text-sm text-gray-400">添付なし</div>
+          )}
+        
+          {/* ← 編集モード関係なく常にファイル追加を出す
+        
+       
+          {/* ← 編集モード関係なく常にファイル追加を出す */}
+          <div className="mt-2">
+            <input
+              type="file"
+              multiple
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                setDraftFiles(files);
+                e.target.value = ""; 
+              }}
+              className="text-sm"
+            />
+  
+            {draftFiles.length > 0 && selected?.id && (
+              <div className="mt-2">
+                <ul className="list-disc list-inside text-sm mb-2">
                   {draftFiles.map((f) => (
                     <li key={f.name}>{f.name}</li>
                   ))}
                 </ul>
-              )}
-            </div>
-          )}
+  
+                <button
+                  onClick={handleSaveAttachment}
+                  className="bg-blue-500 text-white text-sm px-3 py-1 rounded hover:bg-blue-600"
+                >
+                  📤 アップロード
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
 
         
@@ -406,7 +456,6 @@ export default function App() {
         />
 
         {/* フッター
-        */}
         <div className="p-3 border-t flex justify-end items-center space-x-3">
           {!isEditing ? (
             <button
@@ -424,8 +473,61 @@ export default function App() {
             </button>
           )}
         </div>
+        */}
 
       </div>
+
+
+      {previewFile && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50"
+          onClick={() => setPreviewFile(null)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl p-4 max-w-3xl max-h-[90vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold mb-3 break-all">
+              {previewFile.filename}
+            </h3>
+      
+            {previewFile.filename.match(/\.(png|jpe?g|gif|webp)$/i) ? (
+              <img
+                src={previewFile.url}
+                alt={previewFile.filename}
+                className="max-w-full max-h-[70vh] object-contain mx-auto"
+              />
+            ) : previewFile.filename.match(/\.(pdf)$/i) ? (
+              <iframe
+                src={previewFile.url}
+                className="w-full h-[70vh]"
+                title={previewFile.filename}
+              />
+            ) : (
+              <div className="text-center">
+                <p className="text-gray-600 mb-3">
+                  このファイルはプレビューできません。
+                </p>
+                <a
+                  href={previewFile.url}
+                  target="_blank"
+                  className="text-blue-600 underline"
+                >
+                  ダウンロードする
+                </a>
+              </div>
+            )}
+      
+            <button
+              onClick={() => setPreviewFile(null)}
+              className="mt-4 bg-gray-200 px-3 py-1 rounded hover:bg-gray-300"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
+      
     </div>
  );
 }
