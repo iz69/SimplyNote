@@ -8,6 +8,7 @@ from .config import load_config
 import os, logging, shutil, uuid
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 
 BASE_PATH = os.getenv("BASE_PATH", "/").rstrip("/") + "/"
 
@@ -119,27 +120,45 @@ def startup():
 # ------------------------------------------------------------
 # Notes CRUD
 # ------------------------------------------------------------
+
 @app.get("/notes", response_model=list[NoteOut])
-def get_notes(request: Request, token: str = Depends(oauth2_scheme)):
+def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(oauth2_scheme)):
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT n.*, 
-               GROUP_CONCAT(t.name, ',') AS tags
-        FROM notes n
-        LEFT JOIN note_tags nt ON n.id = nt.note_id
-        LEFT JOIN tags t ON nt.tag_id = t.id
-        GROUP BY n.id
-        ORDER BY n.updated_at DESC
-    """)
+
+    if tag:
+        # 特定タグが指定された場合：そのタグを持つノートだけ
+        cur.execute("""
+            SELECT n.*,
+                   GROUP_CONCAT(t2.name, ',') AS tags
+            FROM notes n
+            JOIN note_tags nt1 ON n.id = nt1.note_id
+            JOIN tags t1 ON nt1.tag_id = t1.id
+            LEFT JOIN note_tags nt2 ON n.id = nt2.note_id
+            LEFT JOIN tags t2 ON nt2.tag_id = t2.id
+            WHERE t1.name = ?
+            GROUP BY n.id
+            ORDER BY n.updated_at DESC
+        """, (tag,))
+    else:
+        # 全ノート
+        cur.execute("""
+            SELECT n.*,
+                   GROUP_CONCAT(t.name, ',') AS tags
+            FROM notes n
+            LEFT JOIN note_tags nt ON n.id = nt.note_id
+            LEFT JOIN tags t ON nt.tag_id = t.id
+            GROUP BY n.id
+            ORDER BY n.updated_at DESC
+        """)
+
     notes = []
     for row in cur.fetchall():
         d = dict(row)
         d["tags"] = d["tags"].split(",") if d["tags"] else []
 
-        cur2 = conn.cursor()
-
         # 添付ファイルを取得して追加
+        cur2 = conn.cursor()
         cur2.execute(
             "SELECT id, filename_original, filename_stored FROM attachments WHERE note_id=?",
             (d["id"],),
@@ -148,20 +167,24 @@ def get_notes(request: Request, token: str = Depends(oauth2_scheme)):
             {
                 "id": fid,
                 "filename": fname,
-                 "url": f"{request.base_url}{BASE_PATH}files/{stored}"
-                
+                "url": f"{request.base_url}{BASE_PATH}files/{stored}",
             }
             for fid, fname, stored in cur2.fetchall()
         ]
         cur2.close()
         d["files"] = files
 
-        logger.info(f"🧾 Note {d['id']} - {len(files)} attachments found")
-
         notes.append(d)
 
     conn.close()
     return notes
+
+
+
+
+
+
+
 
 
 @app.get("/notes/{note_id}", response_model=NoteOut)
@@ -201,6 +224,8 @@ def get_note(note_id: int, request: Request, token: str = Depends(oauth2_scheme)
     conn.close()
     return d
 
+# -----------------------------------------------------------------------
+
 @app.post("/notes", response_model=NoteOut)
 def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
     now = datetime.utcnow().isoformat()
@@ -226,6 +251,9 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
             cur.execute("SELECT id FROM tags WHERE name=?", (tag_name,))
             tag_id = cur.fetchone()["id"]
             cur.execute("INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)", (note_id, tag_id))
+
+    # 不要タグを削除
+    cleanup_unused_tags(cur)
 
     conn.commit()
     conn.close()
@@ -305,6 +333,10 @@ def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
     # ノート本体を削除
     cur.execute("DELETE FROM notes WHERE id=?", (note_id,))
     deleted = cur.rowcount
+
+    # 不要タグを削除
+    cleanup_unused_tags(cur)
+
     conn.commit()
     conn.close()
 
@@ -324,11 +356,10 @@ def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
 
     return {"detail": "Note and attachments deleted"}
 
+# -----------------------------------------------------------------------
 
 @app.post("/notes/{note_id}/attachments")
 def upload_attachment( note_id: int, request: Request, file: UploadFile = File(...), token: str = Depends(oauth2_scheme),):
-
-    logger = logging.getLogger("attachments!!")
 
     conn = get_connection()
     cur = conn.cursor()
@@ -378,6 +409,141 @@ def upload_attachment( note_id: int, request: Request, file: UploadFile = File(.
         "filename": file.filename,
         "url": f"{request.base_url}{BASE_PATH}files/{safe_name}",
     }
+
+@app.delete("/attachments/{attachment_id}")
+def delete_attachment( attachment_id: int, token: str = Depends(oauth2_scheme),):
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # 添付ファイル情報の取得
+    cur.execute("SELECT filename_stored FROM attachments WHERE id=?", (attachment_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    filename_stored = row[0]
+    upload_dir = config["upload"]["dir"]
+    file_path = os.path.join(upload_dir, filename_stored)
+
+    # DB削除
+    cur.execute("DELETE FROM attachments WHERE id=?", (attachment_id,))
+    conn.commit()
+    conn.close()
+
+    # ファイル削除（存在チェック付き）
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    except Exception as e:
+        # ログだけ出してHTTPエラーにはしない（DBとの整合性優先）
+        logging.getLogger("attachments!!").warning(f"Failed to delete file {file_path}: {e}")
+
+    return {"detail": "Attachment deleted successfully"}
+
+# -----------------------------------------------------------------------
+
+@app.post("/notes/{note_id}/tags")
+def add_tag(note_id: int, tag: dict, token: str = Depends(oauth2_scheme)):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # ノートの存在チェック
+    cur.execute("SELECT id FROM notes WHERE id=?", (note_id,))
+    if not cur.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    tag_name = tag.get("name")
+    if not tag_name:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Tag name required")
+
+    # タグがなければ作成
+    cur.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag_name,))
+    cur.execute("SELECT id FROM tags WHERE name=?", (tag_name,))
+    tag_id = cur.fetchone()[0]
+
+    # note_tags に関連付け（重複は無視）
+    cur.execute("INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?, ?)", (note_id, tag_id))
+
+    conn.commit()
+
+    # 不要タグを削除
+    cleanup_unused_tags(cur)
+
+    # 現在のタグ一覧を返す
+    cur.execute("""
+        SELECT t.name FROM tags t
+        JOIN note_tags nt ON t.id = nt.tag_id
+        WHERE nt.note_id=?
+    """, (note_id,))
+    tags = [row[0] for row in cur.fetchall()]
+
+    conn.close()
+
+    return {"note_id": note_id, "tags": tags}
+
+
+@app.delete("/notes/{note_id}/tags/{tag_name}")
+def remove_tag(note_id: int, tag_name: str, token: str = Depends(oauth2_scheme)):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT id FROM tags WHERE name=?", (tag_name,))
+    tag_row = cur.fetchone()
+    if not tag_row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Tag not found")
+    tag_id = tag_row[0]
+
+    # note_tags から削除
+    cur.execute("DELETE FROM note_tags WHERE note_id=? AND tag_id=?", (note_id, tag_id))
+    conn.commit()
+
+    # 不要タグを削除
+    cleanup_unused_tags(cur)
+
+    # 現在のタグ一覧を返す
+    cur.execute("""
+        SELECT t.name FROM tags t
+        JOIN note_tags nt ON t.id = nt.tag_id
+        WHERE nt.note_id=?
+    """, (note_id,))
+    tags = [row[0] for row in cur.fetchall()]
+
+    conn.close()
+
+    return {"note_id": note_id, "tags": tags}
+
+@app.get("/tags")
+def get_all_tags(token: str = Depends(oauth2_scheme)):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT t.name, COUNT(nt.note_id) AS note_count
+        FROM tags t
+        LEFT JOIN note_tags nt ON t.id = nt.tag_id
+        GROUP BY t.id
+        ORDER BY t.name COLLATE NOCASE
+    """)
+    tags = [{"name": row[0], "note_count": row[1]} for row in cur.fetchall()]
+
+    conn.close()
+    return tags
+
+def cleanup_unused_tags(cur):
+    cur.execute("""
+        DELETE FROM tags
+        WHERE id NOT IN (SELECT DISTINCT tag_id FROM note_tags)
+    """)
+    deleted = cur.rowcount
+    if deleted > 0:
+        logging.getLogger("tags").info(f"🧹 Deleted {deleted} unused tags")
+
+# -----------------------------------------------------------------------
 
 @app.get("/search")
 def search_notes(q: str, token: str = Depends(oauth2_scheme)):

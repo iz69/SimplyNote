@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 /* Tailwindのリセット後に、Vite初期CSSを完全に無効化 */
 html, body, #root {

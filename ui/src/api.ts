@@ -1,15 +1,18 @@
 // api.ts
+export interface FileOut {
+  id: number;
+  filename: string;
+  url: string;
+}
+
 export interface Note {
   id: number;
   title: string;
   content: string;
+  tags?: string[];
+  files?: FileOut[]; 
   updated_at?: string;
-}
-
-export interface Attachment {
-  id: number;
-  filename: string;
-  url: string;
+  created_at?: string;
 }
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
@@ -67,6 +70,12 @@ export async function deleteNote(token: string, id: number): Promise<void> {
 
 // -------------------------
 
+export interface Attachment {
+  id: number;
+  filename: string;
+  url: string;
+}
+
 export async function uploadAttachment(
   token: string,
   noteId: number,
@@ -83,6 +92,88 @@ export async function uploadAttachment(
   if (!res.ok) throw new Error("upload_error");
   return res.json();
 }
+
+export async function deleteAttachment(
+  token: string,
+  attachmentId: number
+): Promise<void> {
+  const res = await fetch(`${API_URL}/attachments/${attachmentId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("delete_error");
+}
+
+// -------------------------
+
+export interface Tag {
+  name: string;
+  note_count?: number;
+}
+
+// ノートにタグを追加
+export async function addTag(
+  token: string,
+  noteId: number,
+  tagName: string
+): Promise<string[]> {
+  const res = await fetch(`${API_URL}/notes/${noteId}/tags`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: tagName }),
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("add_tag_error");
+  const data = await res.json();
+  return data.tags; // バックエンド側の返却 {"note_id":1,"tags":["日記","仕事"]} に対応
+}
+
+// ノートからタグを削除
+export async function removeTag(
+  token: string,
+  noteId: number,
+  tagName: string
+): Promise<string[]> {
+  const res = await fetch(`${API_URL}/notes/${noteId}/tags/${encodeURIComponent(tagName)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("remove_tag_error");
+  const data = await res.json();
+  return data.tags;
+}
+
+// 全タグ一覧を取得
+export async function getAllTags(token: string): Promise<Tag[]> {
+  const res = await fetch(`${API_URL}/tags`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("get_tags_error");
+  return res.json();
+}
+
+// タグでノートを絞り込み
+export async function getNotesByTag(
+  token: string,
+  tagName: string
+): Promise<Note[]> {
+  const res = await fetch(`${API_URL}/notes?tag=${encodeURIComponent(tagName)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("get_notes_error");
+  return res.json();
+}
+
+// -------------------------
 
 export async function getNoteDetail(token: string, id: number): Promise<Note> {
   const res = await fetch(`${API_URL}/notes/${id}`, {

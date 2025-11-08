@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getNotes, createNote, updateNote, deleteNote, saveNoteWithAttachments } from "./api";
+import { deleteAttachment, getAllTags, addTag, removeTag } from "./api";
 
 export default function App() {
 
@@ -16,12 +17,16 @@ export default function App() {
   const [draftFiles, setDraftFiles] = useState([]);       // 新しく追加するファイル
   const [attachments, setAttachments] = useState([]);     // サーバ上の既存添付ファイル
 
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [newTagInput, setNewTagInput] = useState("");
+
   const handleSelect = (note: Note) => {
     setSelected(note);
     setIsEditing(false);
     setDraft(note.content);
-    setAttachments(note.files || []);
     setDraftFiles([]);
+    setAttachments(note.files || []);
+    setTags((note.tags || []).map((name) => ({ name })));
   };
 
   // --------------------
@@ -60,17 +65,18 @@ export default function App() {
 
   const token = localStorage.getItem("token");
 
-  // 一覧取得
+  // ノート一覧取得
   const fetchNotes = async () => {
     try {
       const data = await getNotes(token!);
       setNotes(data);
       if (data.length > 0) {
-         const first = data[0];
-         setSelected(first);
-         setDraft(first.content);
-         setAttachments(first.files || []);
-
+        const first = data[0];
+        setSelected(first);
+        setDraft(first.content);
+        setAttachments(first.files || []);
+//        setTags(first.tags || []); 
+        setTags((first.tags || []).map((name) => ({ name })));
       }
     } catch (err: any) {
       if (err.message === "unauthorized") {
@@ -78,6 +84,46 @@ export default function App() {
         window.location.href = `${BASE_PATH}/login`;
       } else {
         console.error(err);
+      }
+    }
+  };
+
+  // タグ一覧を取得
+  const fetchTags = async () => {
+    try {
+      const data = await getAllTags(token!);
+      // data は [{ name: "仕事", note_count: 3 }, ...]
+      setTags(data); // ← タグ一覧の state にセット（useState で定義しておく）
+
+//alert( data );
+
+    } catch (err: any) {
+      if (err.message === "unauthorized") {
+        localStorage.removeItem("token");
+        window.location.href = `${BASE_PATH}/login`;
+      } else {
+        console.error(err);
+        alert("タグ一覧の取得に失敗しました。");
+      }
+    }
+  };
+
+  // タグで絞り込み
+  const fetchNotesByTag = async (tagName: string) => {
+    try {
+      const data = await getNotesByTag(token!, tagName);
+      setNotes(data);
+      setSelected(data[0] || null);
+      setDraft(data[0]?.content || "");
+      setAttachments(data[0]?.files || []);
+      setTags(data[0].tags || []); 
+    } catch (err: any) {
+      if (err.message === "unauthorized") {
+        localStorage.removeItem("token");
+        window.location.href = `${BASE_PATH}/login`;
+      } else {
+        console.error(err);
+        alert("ノートの取得に失敗しました。");
       }
     }
   };
@@ -110,6 +156,7 @@ export default function App() {
       setAttachments(refreshed.files || []);
       setDraftFiles([]);
       setIsEditing(false);
+      setTags(refreshed.tags || []); 
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
@@ -142,6 +189,60 @@ export default function App() {
     }
   };
 
+  // 添付ファイル削除
+  const handleDeleteAttachment = async (attachmentId: number, filename: string) => {
+    if (!confirm(`「${filename}」を削除しますか？`)) return;
+    try {
+      await deleteAttachment(token!, attachmentId);
+      setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+    } catch (err: any) {
+      if (err.message === "unauthorized") {
+        localStorage.removeItem("token");
+        window.location.href = `${BASE_PATH}/login`;
+      } else {
+        console.error(err);
+        alert("添付ファイルの削除に失敗しました。");
+      }
+    }
+  };
+
+  // タグ追加
+  const handleAddTag = async (noteId: number, tagName: string) => {
+    if (!tagName.trim()) return;
+    try {
+      const updatedTags = await addTag(token!, noteId, tagName.trim());
+//      setTags(updatedTags); // 新しいタグリストに更新
+      setTags(updatedTags.map((name) => ({ name })));
+    } catch (err: any) {
+      if (err.message === "unauthorized") {
+        localStorage.removeItem("token");
+        window.location.href = `${BASE_PATH}/login`;
+      } else {
+        console.error(err);
+        alert("タグの追加に失敗しました。");
+      }
+    }
+  };
+  
+  // タグ削除
+  const handleRemoveTag = async (noteId: number, tagName: string) => {
+    if (!confirm(`タグ「${tagName}」を削除しますか？`)) return;
+  
+    try {
+      const updatedTags = await removeTag(token!, noteId, tagName);
+//      setTags(updatedTags); // 更新されたタグリストを反映
+      setTags(updatedTags.map((name) => ({ name })));
+    } catch (err: any) {
+      if (err.message === "unauthorized") {
+        localStorage.removeItem("token");
+        window.location.href = `${BASE_PATH}/login`;
+      } else {
+        console.error(err);
+        alert("タグの削除に失敗しました。");
+      }
+    }
+  };
+
   // ログアウト
   const handleLogout = () => {
     localStorage.removeItem("token"); // トークン削除
@@ -153,8 +254,8 @@ export default function App() {
   // ------------------------------------------------------------
   useEffect(() => {
     fetchNotes();
+    fetchTags();
   }, []);
-
 
   // ------------------------------------------------------------
   // UI 表示
@@ -202,7 +303,10 @@ export default function App() {
         {/* 本文 */}
         <div className="flex-1 p-4 overflow-y-auto">
           {!isEditing ? (
-            <div className="prose max-w-none whitespace-pre-wrap">
+            <div 
+              className="prose max-w-none whitespace-pre-wrap"
+              onClick={() => setIsEditing(true)} // クリックで編集開始
+            >
               <ReactMarkdown remarkPlugins={[[remarkGfm, { breaks: true }]]}>
                 {(selected ? selected.content : "").replace(/\r\n/g, "\n")}
               </ReactMarkdown>
@@ -213,10 +317,17 @@ export default function App() {
               value={draft}
               onChange={handleChange}
               placeholder="ここにノートを書き始めましょう..."
+              autoFocus
             />
           )}
         </div>
 
+            {/*
+              onBlur={() => {
+                setIsEditing(false);
+                handleSave(); // フォーカスが外れたとき自動保存
+              }}
+            */}
 
         {/* 添付ファイル（本文の下・フッターの上） */}
         <div className="px-4 py-3 border-t bg-gray-50">
@@ -226,11 +337,20 @@ export default function App() {
             attachments?.length > 0 ? (
               <ul className="list-disc list-inside text-sm">
                 {attachments.map((f) => (
-                  <li key={f.id}>
-                    <a href={f.url} target="_blank" className="text-blue-600 underline">
+
+                  <li key={f.id} className="flex items-center justify-between">
+                    <a href={f.url} target="_blank" className="text-blue-600 underline break-all">
                       {f.filename}
                     </a>
+                    <button
+                      onClick={() => handleDeleteAttachment(f.id, f.filename)}
+                      className="ml-2 text-red-500 hover:text-red-700"
+                      title="削除"
+                    >
+                      🗑️
+                    </button>
                   </li>
+
                 ))}
               </ul>
             ) : (
@@ -255,9 +375,38 @@ export default function App() {
           )}
         </div>
 
+        
+        {/* タグ表示 */}
+        <div className="flex flex-wrap gap-2 mt-2">
+          {tags.map((tag) => (
+            <span
+              key={tag.name}
+              className="px-2 py-1 bg-gray-200 rounded cursor-pointer hover:bg-gray-300"
+              onClick={() => handleRemoveTag(selected.id, tag.name)}
+            >
+              #{tag.name}
+            </span>
+          ))}
+        </div>
+        
+        {/* タグ */}
+        <input
+          type="text"
+          value={newTagInput}
+          onChange={(e) => setNewTagInput(e.target.value)}
+          onBlur={() => {
+            const value = newTagInput.trim();
+            if (value && selected?.id) {
+              handleAddTag(selected.id, value);
+              setNewTagInput("");
+            }
+          }}
+          placeholder="タグを追加..."
+          className="border rounded px-2 py-1 mt-2"
+        />
 
-
-        {/* フッター */}
+        {/* フッター
+        */}
         <div className="p-3 border-t flex justify-end items-center space-x-3">
           {!isEditing ? (
             <button
