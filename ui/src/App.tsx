@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { FilePlus } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getNotes, createNote, updateNote, deleteNote, saveNote } from "./api";
@@ -30,6 +31,7 @@ export default function App() {
   const [showTagList, setShowTagList] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
+  const [isCreating, setIsCreating] = useState(false);          // 新規ノート
   const [showTrashOnly, setShowTrashOnly] = useState(false);    // ゴミ箱表示
 
   const [showMenu, setShowMenu] = useState(false);
@@ -74,11 +76,14 @@ export default function App() {
 
   // 表示リストが変わったら、先頭のノートを自動選択
   useEffect(() => {
+
+    if (isCreating) return; 
+
     if (filteredNotes.length === 0) {
       setSelected(null);
       return;
     }
-  
+
     // 現在の選択ノートが filteredNotes に含まれていれば維持
     const exists = filteredNotes.some(n => n.id === selected?.id);
     if (!exists) {
@@ -109,6 +114,8 @@ export default function App() {
   // --------------------
 
   const handleSelect = (note: Note) => {
+
+    setIsCreating(false);
 
     setSelected(note);
 //
@@ -171,6 +178,7 @@ export default function App() {
 
   // ノート一覧取得
   const fetchNotes = async () => {
+
     try {
       const data = await getNotes(token!);
       setNotes(data);
@@ -240,7 +248,10 @@ export default function App() {
  
   // 新規作成（空ノートを開く）
   const handleNew = () => {
+
+    setIsCreating(true);
     setSelected(null);
+
 //    setDraft("");
 //    setDraftTitle("");
 //    setAttachments([]);
@@ -510,7 +521,7 @@ export default function App() {
     <div className="h-screen flex text-gray-800">
 
       {/* 左カラム */}
-      <div className="w-1/3 border-r border-gray-300 flex flex-col">
+      <div className="w-1/4 border-r border-gray-300 flex flex-col">
 
         {/* ヘッダー */}
         {/*
@@ -541,8 +552,8 @@ export default function App() {
           <div className="flex items-center space-x-2">
             <button
               onClick={handleNew}
-              className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600" >
-              ＋ 新規
+              className="bg-green-500 text-white px-2 py-2 rounded hover:bg-green-600" >
+              <FilePlus className="w-4 h-4" />
             </button>
           </div>
 
@@ -665,10 +676,23 @@ export default function App() {
                 selected?.id === note.id ? "bg-gray-200" : ""
               }`}
             >
-              <div className="font-medium">{note.title}</div>
-              <div className="text-sm text-gray-500">
-                {note.updated_at?.slice(0, 10)}
+
+              <div className="font-medium truncate overflow-hidden whitespace-nowrap">
+                {note.title}
               </div>
+
+              <div className="text-sm text-gray-500 flex items-center flex-wrap gap-1">
+                <span className="mr-2">{note.updated_at?.slice(0, 10)}</span>
+                {note.tags?.map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+
             </div>
           ))}
   
@@ -839,10 +863,43 @@ export default function App() {
 
         {/* 添付ファイル（本文の下・フッターの上） */}
         <div className="px-4 py-3 border-t bg-gray-50">
-          <div className="font-semibold text-sm mb-1">添付ファイル</div>
 
-          {attachments?.length > 0 && (
+          <div className="flex items-center justify-start flex-wrap gap-3 mb-2">
 
+            <span className="font-semibold text-sm">添付ファイル</span>
+
+            {/* 見た目用のカスタムボタン */}
+            {selected && (
+              <label
+                htmlFor="fileInput"
+                className="bg-gray-200 text-gray-800 text-sm px-2 py-0.5 rounded cursor-pointer hover:bg-gray-300"
+              >
+                📁 ファイル選択
+              </label>
+            )}
+
+            {/* ファイル選択の実体（非表示） */}
+            <input
+              id="fileInput"
+              type="file"
+              multiple
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                setDraftFiles(files);
+                e.target.value = "";
+              }}
+              className="hidden"
+            />
+
+            {/* 選択状態の表示 */}
+            {draftFiles.length > 0 && (
+              <span className="text-sm text-gray-600">
+                { `${draftFiles.length} 件 アップロード待ち` }
+              </span>
+            )}
+          </div>
+
+          {attachments?.length > 0 && selected?.id && (
 
             <ul className="list-disc list-inside text-sm">
               {attachments.map((f) => (
@@ -868,10 +925,9 @@ export default function App() {
           )}
         
           {/* 添付ファイル追加 */}
-          <div className="mt-2">
+          {draftFiles.length > 0 && selected?.id && (
 
-            {draftFiles.length > 0 && selected?.id && (
-
+            <div className="mt-2">
               <div className="mt-2 mb-4 flex items-start gap-4">
 
                 <button
@@ -886,47 +942,13 @@ export default function App() {
                   ))}
                 </ul>
               </div>
-
-            )}
-
-            <div className="flex items-center gap-3">
-              {/* 見た目用のカスタムボタン */}
-              <label
-                htmlFor="fileInput"
-                className="bg-gray-200 text-gray-800 text-sm px-2 py-0.5 rounded cursor-pointer hover:bg-gray-300"
-              >
-                📁 ファイル選択
-              </label>
-
-              {/* ファイル選択の実体（非表示） */}
-              <input
-                id="fileInput"
-                type="file"
-                multiple
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  setDraftFiles(files);
-                  e.target.value = "";
-                }}
-                className="hidden"
-              />
-
-              {/* 選択状態の表示 */}
-              <span className="text-sm text-gray-600">
-                {draftFiles.length > 0
-                  ? `${draftFiles.length} 件選択中`
-                  : "選択されていません"}
-              </span>
             </div>
-
-
-
-          </div>
+          )}
 
         </div>
         
 
-        {/* フッター */}
+        {/* フッター
         {isEditing && (
           <div className="p-3 border-t flex justify-start items-center space-x-3">
             <button
@@ -936,6 +958,25 @@ export default function App() {
             </button>
           </div>
         )}
+        */}
+
+
+        {/* フッター */}
+        <div className="p-3 border-t flex justify-end items-center space-x-3">
+          {!isEditing ? (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="bg-gray-200 px-3 py-1 rounded hover:bg-gray-300" >
+              ✏️  編集
+            </button>
+          ) : (
+            <button
+              onClick={handleSave}
+              className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
+              💾 保存
+            </button>
+          )}
+        </div>
 
 
       </div>
