@@ -139,7 +139,7 @@ alert(data.map(tag => tag.name).join(", "));
 
     try {
 
-      const updated = await saveNote( token!, selected, draft);
+      const updated = await saveNote( token!, selected, draft );
   
       setSelected(updated);
       setNotes((prev) =>
@@ -285,13 +285,12 @@ alert(data.map(tag => tag.name).join(", "));
 
       {/* 左カラム */}
       <div className="w-1/3 border-r border-gray-300 flex flex-col">
+
+        {/* ヘッダー */}
         <div className="p-3 border-b flex justify-between items-center">
-          <h1 className="font-semibold text-lg">ノート一覧</h1>
+          <h1 className="font-semibold text-lg">All Notes</h1>
           <button onClick={handleNew} className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600">
             ＋ 新規
-          </button>
-          <button onClick={handleLogout} className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
-            ログアウト
           </button>
         </div>
 
@@ -303,22 +302,80 @@ alert(data.map(tag => tag.name).join(", "));
             </div>
           ))}
         </div>
+
+        {/* フッター */}
+        <div className="p-3 border-t mt-auto">
+          <button onClick={handleLogout} className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
+            ログアウト
+          </button>
+        </div>
+
       </div>
 
       {/* 右カラム */}
       <div className="flex-1 flex flex-col">
 
         {/* ヘッダー */}
-        <div className="p-3 border-b flex justify-between items-center">
-          <h2 className="font-semibold text-lg">
-            {selected ? selected.title : "新しいノート"}
-          </h2>
-          {!isEditing && selected && (
-            <button onClick={handleDelete} className="text-red-600 hover:text-red-800">
-              🗑️ 削除
-            </button>
+        <div className="p-3 border-b">
+
+          {/* ヘッダー タイトル＋削除ボタン */}
+          <div className="flex justify-between items-center">
+
+            <h2 className="font-semibold text-lg">
+              {selected ? selected.title : "新しいノート"}
+            </h2>
+            {!isEditing && selected && (
+              <button onClick={handleDelete} className="text-red-600 hover:text-red-800">
+                🗑️ 削除
+              </button>
+            )}
+          </div>
+  
+          {/* ヘッダー タグ */}
+          {selected && (
+ 
+            <div className="mt-2">
+              <div className="flex flex-wrap items-center gap-2">
+ 
+                {/* タグ追加 */}
+                <input
+                  type="text"
+                  value={newTagInput}
+                  onChange={(e) => setNewTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault(); // フォーム送信防止
+                      const value = newTagInput.trim();
+                      if (value && selected?.id) {
+                        handleAddTag(selected.id, value);
+                        setNewTagInput("");
+                      }
+                    }
+                  }}
+                  onBlur={() => {
+                    // フォーカスが外れたらキャンセル（入力だけクリア）
+                    setNewTagInput("");
+                  }}
+                  placeholder="タグを追加..."
+                  className="border rounded px-2 py-1 mt-2"
+                />
+
+                {/* タグ一覧 */}
+                {tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="px-2 py-1 bg-gray-200 rounded cursor-pointer hover:bg-gray-300"
+                    onClick={() => handleRemoveTag(selected.id, tag)}
+                  >
+                    #{tag}
+                  </span>
+                ))}
+        
+              </div>
+            </div>
           )}
         </div>
+  
 
         {/* 本文 */}
         <div
@@ -424,61 +481,10 @@ alert(data.map(tag => tag.name).join(", "));
           </div>
 
         </div>
-
         
-        {/* タグ表示 */}
-        <div className="flex flex-wrap gap-2 mt-2">
-          {tags.map((tag) => (
-            <span
-              key={tag}
-              className="px-2 py-1 bg-gray-200 rounded cursor-pointer hover:bg-gray-300"
-              onClick={() => handleRemoveTag(selected.id, tag)}
-            >
-              #{tag}
-            </span>
-          ))}
-        </div>
-        
-        {/* タグ */}
-        <input
-          type="text"
-          value={newTagInput}
-          onChange={(e) => setNewTagInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault(); // フォーム送信防止
-              const value = newTagInput.trim();
-              if (value && selected?.id) {
-                handleAddTag(selected.id, value);
-                setNewTagInput("");
-              }
-            }
-          }}
-          onBlur={() => {
-            // フォーカスが外れたらキャンセル（入力だけクリア）
-            setNewTagInput("");
-          }}
-          placeholder="タグを追加..."
-          className="border rounded px-2 py-1 mt-2"
-        />
 
         {/* フッター
         <div className="p-3 border-t flex justify-end items-center space-x-3">
-          {!isEditing ? (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="bg-gray-200 px-3 py-1 rounded hover:bg-gray-300"
-            >
-              ✏️ 編集
-            </button>
-          ) : (
-            <button
-              onClick={handleSave}
-              className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
-            >
-              💾 保存
-            </button>
-          )}
         </div>
         */}
 

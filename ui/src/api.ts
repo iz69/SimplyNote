@@ -31,7 +31,10 @@ export async function getNotes(token: string): Promise<Note[]> {
   return res.json();
 }
 
-export async function createNote(token: string, payload: { title: string; content: string }): Promise<Note> {
+export async function createNote(
+  token: string,
+  payload: { title: string; content: string; tags?: string[] }
+): Promise<Note> {
   const res = await fetch(`${API_URL}/notes`, {
     method: "POST",
     headers: authHeaders(token),
@@ -45,7 +48,7 @@ export async function createNote(token: string, payload: { title: string; conten
 export async function updateNote(
   token: string,
   id: number,
-  payload: { title?: string; content?: string }
+  payload: { title?: string; content?: string; tags?: string[] }
 ): Promise<Note> {
   const res = await fetch(`${API_URL}/notes/${id}`, {
     method: "PUT",
@@ -189,6 +192,7 @@ export async function saveNote(
   selected: Note | null,
   draft: string,
 ): Promise<Note> {
+
   let note: Note;
 
   // ノート作成 or 更新
@@ -196,12 +200,14 @@ export async function saveNote(
     note = await updateNote(token, selected.id, {
       title: selected.title,
       content: draft,
+      tags: selected.tags ?? [],
     });
   } else {
-    const autoTitle = draft.split("\n")[0].slice(0, 30) || "新しいノート";
+    const autoTitle = draft.split("\n")[0].slice(0, 30) || "New Note...";
     note = await createNote(token, {
       title: autoTitle,
       content: draft,
+      tags: [],
     });
   }
 
