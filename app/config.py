@@ -8,7 +8,6 @@ DEFAULT_CONFIG = {
         "type": "sqlite",                # 将来 "postgres", "mysql" などに変更可能
         "path": "/data/simplynote.db"
     },
-    "user_mode": "single",               # "single" or "multi"
     "upload": {
         "max_size_mb": 50,
         "dir": "/data/files"

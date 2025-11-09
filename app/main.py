@@ -62,15 +62,15 @@ logger = logging.getLogger("simplynote")
 # ------------------------------------------------------------
 @app.middleware("http")
 async def debug_request(request: Request, call_next):
-#    logger.info(f"=== URL DEBUG INFO ===")
-#    logger.info(f"=== method     {request.method}")
-#    logger.info(f"=== url.path   {request.url.path}")
-#    logger.info(f"=== url.query  {request.url.query}")
-#    logger.info(f"=== base_url   {request.base_url}")
-#    logger.info(f"=== x-forwarded-prefix {request.headers.get('x-forwarded-prefix')}")
-#    logger.info(f"=== scope.root_path {request.scope.get('root_path')}")
-#    logger.info(f"=== scope.path {request.scope.get('path')}")
-#    logger.info(f"=== BASE_PATH  {BASE_PATH}")
+    logger.info(f"=== URL DEBUG INFO ===")
+    logger.info(f"=== method     {request.method}")
+    logger.info(f"=== url.path   {request.url.path}")
+    logger.info(f"=== url.query  {request.url.query}")
+    logger.info(f"=== base_url   {request.base_url}")
+    logger.info(f"=== x-forwarded-prefix {request.headers.get('x-forwarded-prefix')}")
+    logger.info(f"=== scope.root_path {request.scope.get('root_path')}")
+    logger.info(f"=== scope.path {request.scope.get('path')}")
+    logger.info(f"=== BASE_PATH  {BASE_PATH}")
     response = await call_next(request)
     return response
 
@@ -217,10 +217,8 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
     conn = get_connection()
     cur = conn.cursor()
 
-    if config["user_mode"] == "single":
-        user_id = 1
-    else:
-        user_id = current_user.id
+    current_user = get_current_user(token)
+    user_id = current_user.id
 
     # ノート本体
     cur.execute(
@@ -229,23 +227,14 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
     )
     note_id = cur.lastrowid
 
-#    # タグがあれば登録
-#    # タグは add_tag() でつける
-#    if hasattr(note, "tags") and note.tags:
-#        for tag_name in note.tags:
-#            cur.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag_name,))
-#            cur.execute("SELECT id FROM tags WHERE name=?", (tag_name,))
-#            tag_id = cur.fetchone()["id"]
-#            cur.execute("INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)", (note_id, tag_id))
-
     conn.commit()
     conn.close()
 
+    # 添付ファイルとタグは別でAPIで
     return {
         "id": note_id,
         "title": note.title,
         "content": note.content,
-#        "tags": note.tags if hasattr(note, "tags") else [],
         "tags": [],
         "files": [],
         "created_at": now,
@@ -260,30 +249,18 @@ def update_note(note_id: int, note: NoteUpdate, request: Request, token: str = D
     conn = get_connection()
     cur = conn.cursor()
 
+    current_user = get_current_user(token)
+    user_id = current_user.id
+
     cur.execute("SELECT id FROM notes WHERE id=?", (note_id,))
     if not cur.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="Note not found")
 
-    if config["user_mode"] == "single":
-        user_id = 1
-    else:
-        user_id = current_user.id
-
     cur.execute(
         "UPDATE notes SET title=?, content=?, updated_at=? WHERE id=? AND user_id=?",
         (note.title, note.content, now, note_id, user_id),
     )
-
-#    # タグの更新
-#    # タグは add_tag() でつける
-#    cur.execute("DELETE FROM note_tags WHERE note_id=?", (note_id,))
-#    if hasattr(note, "tags") and note.tags:
-#        for tag_name in note.tags:
-#            cur.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag_name,))
-#            cur.execute("SELECT id FROM tags WHERE name=?", (tag_name,))
-#            tag_id = cur.fetchone()["id"]
-#            cur.execute("INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)", (note_id, tag_id))
 
     # 添付ファイル情報を取得
     cur.execute("SELECT id, filename_original, filename_stored FROM attachments WHERE note_id=?", (note_id,))
@@ -299,13 +276,11 @@ def update_note(note_id: int, note: NoteUpdate, request: Request, token: str = D
     conn.commit()
     conn.close()
 
-    logging.getLogger("tags").info(f"###### {tags}")
-
+    # 添付ファイルとタグは別でAPIで
     return {
         "id": note_id,
         "title": note.title,
         "content": note.content,
-#        "tags": note.tags if hasattr(note, "tags") else [],
         "tags": tags,
         "files": files,
         "updated_at": now,
@@ -450,12 +425,11 @@ def add_tag(note_id: int, tag: dict, token: str = Depends(oauth2_scheme)):
         conn.close()
         raise HTTPException(status_code=404, detail="Note not found")
 
-#    tag_name = tag.get("name")
+    # タグの正規化
     tag_name = normalize_tag_name( tag.get("name") )
     if not tag_name:
         conn.close()
         raise HTTPException(status_code=400, detail="Tag name required")
-
 
     # タグがなければ作成
     cur.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag_name,))
@@ -532,6 +506,7 @@ def get_all_tags(token: str = Depends(oauth2_scheme)):
     conn.close()
     return tags
 
+# タグの正規化
 def normalize_tag_name(name: str) -> str:
 
     if not name:
@@ -542,6 +517,7 @@ def normalize_tag_name(name: str) -> str:
     # 前後の空白を除去し、英字は大文字化
     return normalized.strip().upper()
 
+# タグのクリーンアップ
 def cleanup_unused_tags(cur):
 
     # 削除済みノートに紐づいた note_tags を削除
@@ -606,11 +582,8 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
     conn = get_connection()
     cur = conn.cursor()
 
-    if config["user_mode"] == "single":
-        user_id = 1
-    else:
-        current_user = get_current_user(token)
-        user_id = current_user.id
+    current_user = get_current_user(token)
+    user_id = current_user.id
 
     with zipfile.ZipFile(io.BytesIO(content)) as zf:
 
@@ -662,12 +635,8 @@ def export_notes(token: str = Depends(oauth2_scheme)):
     conn = get_connection()
     cur = conn.cursor()
 
-    # ユーザー特定
-    if config["user_mode"] == "single":
-        user_id = 1
-    else:
-        current_user = get_current_user(token)
-        user_id = current_user.id
+    current_user = get_current_user(token)
+    user_id = current_user.id
 
     # ノート一覧取得
     cur.execute("SELECT title, content FROM notes WHERE user_id=?", (user_id,))
@@ -691,6 +660,4 @@ def export_notes(token: str = Depends(oauth2_scheme)):
     }
 
     return StreamingResponse(buffer, media_type="application/zip", headers=headers)
-
-
 
