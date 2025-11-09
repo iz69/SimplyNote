@@ -10,7 +10,6 @@ services:
       - "18888:8000"
     volumes:
 #      - ./app:/app
-      - ./config:/config
       - ./data:/data
     environment:
       - ADMIN_USER=msktoge

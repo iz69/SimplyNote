@@ -9,8 +9,8 @@ export interface Note {
   id: number;
   title: string;
   content: string;
-  tags?: string[];
-  files?: FileOut[]; 
+//  tags?: string[];
+//  files?: FileOut[]; 
   updated_at?: string;
   created_at?: string;
 }
@@ -33,7 +33,7 @@ export async function getNotes(token: string): Promise<Note[]> {
 
 export async function createNote(
   token: string,
-  payload: { title: string; content: string; tags?: string[] }
+  payload: { title: string; content: string }
 ): Promise<Note> {
   const res = await fetch(`${API_URL}/notes`, {
     method: "POST",
@@ -48,7 +48,7 @@ export async function createNote(
 export async function updateNote(
   token: string,
   id: number,
-  payload: { title?: string; content?: string; tags?: string[] }
+  payload: { title?: string; content?: string }
 ): Promise<Note> {
   const res = await fetch(`${API_URL}/notes/${id}`, {
     method: "PUT",
@@ -200,14 +200,12 @@ export async function saveNote(
     note = await updateNote(token, selected.id, {
       title: selected.title,
       content: draft,
-      tags: selected.tags ?? [],
     });
   } else {
     const autoTitle = draft.split("\n")[0].slice(0, 30) || "New Note...";
     note = await createNote(token, {
       title: autoTitle,
       content: draft,
-      tags: [],
     });
   }
 
@@ -224,9 +222,25 @@ export async function saveAttachments(
 
   if( draftFiles.length === 0 ) { return; }
 
-  for (const f of draftFiles) {
-    await uploadAttachment(token, noteId, f);
-  }
+//  for (const f of draftFiles) {
+//    await uploadAttachment(token, noteId, f);
+//  }
+
+  // 並列アップロード
+  await Promise.all(draftFiles.map((f) => uploadAttachment(token, noteId, f)));
+
+  // ノートを再取得して返す
+  const refreshed = await getNoteDetail(token, noteId);
+  return refreshed;
+}
+
+export async function removeAttachment(
+  token: string,
+  noteId: number,
+  attachmentId: number
+): Promise<Note> {
+
+  await deleteAttachment( token!, attachmentId );
 
   // ノートを再取得して返す
   const refreshed = await getNoteDetail(token, noteId);

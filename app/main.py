@@ -209,6 +209,7 @@ def get_note(note_id: int, request: Request, token: str = Depends(oauth2_scheme)
 
 @app.post("/notes", response_model=NoteOut)
 def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
+
     now = datetime.utcnow().isoformat()
     conn = get_connection()
     cur = conn.cursor()
@@ -225,16 +226,14 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
     )
     note_id = cur.lastrowid
 
-    # タグがあれば登録
-    if hasattr(note, "tags") and note.tags:
-        for tag_name in note.tags:
-            cur.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag_name,))
-            cur.execute("SELECT id FROM tags WHERE name=?", (tag_name,))
-            tag_id = cur.fetchone()["id"]
-            cur.execute("INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)", (note_id, tag_id))
-
-    # 不要タグを削除
-    cleanup_unused_tags(cur)
+#    # タグがあれば登録
+#    # タグは add_tag() でつける
+#    if hasattr(note, "tags") and note.tags:
+#        for tag_name in note.tags:
+#            cur.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag_name,))
+#            cur.execute("SELECT id FROM tags WHERE name=?", (tag_name,))
+#            tag_id = cur.fetchone()["id"]
+#            cur.execute("INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)", (note_id, tag_id))
 
     conn.commit()
     conn.close()
@@ -243,7 +242,8 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
         "id": note_id,
         "title": note.title,
         "content": note.content,
-        "tags": note.tags if hasattr(note, "tags") else [],
+#        "tags": note.tags if hasattr(note, "tags") else [],
+        "tags": [],
         "files": [],
         "created_at": now,
         "updated_at": now,
@@ -272,14 +272,15 @@ def update_note(note_id: int, note: NoteUpdate, request: Request, token: str = D
         (note.title, note.content, now, note_id, user_id),
     )
 
-    # タグの更新
-    cur.execute("DELETE FROM note_tags WHERE note_id=?", (note_id,))
-    if hasattr(note, "tags") and note.tags:
-        for tag_name in note.tags:
-            cur.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag_name,))
-            cur.execute("SELECT id FROM tags WHERE name=?", (tag_name,))
-            tag_id = cur.fetchone()["id"]
-            cur.execute("INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)", (note_id, tag_id))
+#    # タグの更新
+#    # タグは add_tag() でつける
+#    cur.execute("DELETE FROM note_tags WHERE note_id=?", (note_id,))
+#    if hasattr(note, "tags") and note.tags:
+#        for tag_name in note.tags:
+#            cur.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag_name,))
+#            cur.execute("SELECT id FROM tags WHERE name=?", (tag_name,))
+#            tag_id = cur.fetchone()["id"]
+#            cur.execute("INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)", (note_id, tag_id))
 
     # 添付ファイル情報を取得
     cur.execute("SELECT id, filename_original, filename_stored FROM attachments WHERE note_id=?", (note_id,))
@@ -288,19 +289,28 @@ def update_note(note_id: int, note: NoteUpdate, request: Request, token: str = D
         for fid, fname, stored in cur.fetchall()
     ]
 
+    # タグ情報を取得
+    cur.execute("SELECT t.name FROM tags t JOIN note_tags nt ON t.id = nt.tag_id WHERE nt.note_id = ?", (note_id,))
+    tags = [row[0] for row in cur.fetchall()]
+
     conn.commit()
     conn.close()
+
+    logging.getLogger("tags").info(f"###### {tags}")
+
     return {
         "id": note_id,
         "title": note.title,
         "content": note.content,
-        "tags": note.tags if hasattr(note, "tags") else [],
+#        "tags": note.tags if hasattr(note, "tags") else [],
+        "tags": tags,
         "files": files,
         "updated_at": now,
     }
 
 @app.delete("/notes/{note_id}")
 def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -427,6 +437,7 @@ def delete_attachment( attachment_id: int, token: str = Depends(oauth2_scheme),)
 
 @app.post("/notes/{note_id}/tags")
 def add_tag(note_id: int, tag: dict, token: str = Depends(oauth2_scheme)):
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -469,6 +480,7 @@ def add_tag(note_id: int, tag: dict, token: str = Depends(oauth2_scheme)):
 
 @app.delete("/notes/{note_id}/tags/{tag_name}")
 def remove_tag(note_id: int, tag_name: str, token: str = Depends(oauth2_scheme)):
+
     conn = get_connection()
     cur = conn.cursor()
 

@@ -12,7 +12,8 @@ else:
 
 def get_connection():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10.0, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL;")
     conn.row_factory = sqlite3.Row  # 辞書形式で取得
     return conn
 
@@ -63,7 +64,7 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         note_id INTEGER NOT NULL,
         filename_original TEXT NOT NULL,
-        file_name_stored TEXT NOT NULL,
+        filename_stored TEXT NOT NULL,
         uploaded_at TEXT NOT NULL,
         FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
     )

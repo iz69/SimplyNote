@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getNotes, createNote, updateNote, deleteNote, saveNote } from "./api";
-import { saveAttachments, deleteAttachment, getAllTags, addTag, removeTag } from "./api";
+import { saveAttachments, removeAttachment, getAllTags, addTag, removeTag } from "./api";
 
 export default function App() {
 
@@ -10,8 +10,12 @@ export default function App() {
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [selected, setSelected] = useState<Note | null>(null);
+
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState("");
+
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(selected?.title || "");
 
   const [draftFiles, setDraftFiles] = useState([]);       // 新しく追加するファイル
   const [attachments, setAttachments] = useState([]);     // サーバ上の既存添付ファイル
@@ -50,7 +54,7 @@ export default function App() {
           setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
           setSelected(updated);
         } else if (value.trim() !== "") {
-          const title = value.split("\n")[0].slice(0, 30) || "新しいノート";
+          const title = value.split("\n")[0].slice(0, 30) || "New Note...";
           const created = await createNote(token, { title, content: value });
           setNotes((prev) => [created, ...prev]);
           setSelected(created);
@@ -88,6 +92,7 @@ export default function App() {
   };
 
   // タグ一覧を取得
+  /*
   const fetchTags = async () => {
     try {
       const data = await getAllTags(token!);
@@ -105,6 +110,7 @@ alert(data.map(tag => tag.name).join(", "));
       }
     }
   };
+  */
 
   // タグで絞り込み
   const fetchNotesByTag = async (tagName: string) => {
@@ -196,6 +202,11 @@ alert(data.map(tag => tag.name).join(", "));
       setDraftFiles([]);
       setAttachments(updated.files || []);
 
+      // 更新
+      setNotes((prev) =>
+        prev.map((n) => (n.id === updated.id ? updated : n))
+      );
+
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
@@ -209,10 +220,20 @@ alert(data.map(tag => tag.name).join(", "));
   
   // 添付ファイル削除
   const handleDeleteAttachment = async (attachmentId: number, filename: string) => {
+
     if (!confirm(`「${filename}」を削除しますか？`)) return;
+
     try {
-      await deleteAttachment(token!, attachmentId);
-      setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+
+//      await deleteAttachment(token!, attachmentId);         // これはファイル消すだけ
+      const updated = await removeAttachment(token!, selected.id, attachmentId);
+
+      setAttachments(updated.files || []);
+      setSelected(updated);
+      setNotes((prev) =>
+        prev.map((n) => (n.id === updated.id ? updated : n))
+      );
+
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
@@ -229,9 +250,13 @@ alert(data.map(tag => tag.name).join(", "));
     if (!tagName.trim()) return;
     try {
       const updatedTags = await addTag(token!, noteId, tagName.trim());
-//      setTags(updatedTags.map((name) => ({ name })));
-//      setTags(updatedTags.tags || []);
+
       setTags(updatedTags || []);
+      setSelected((prev) => (prev ? { ...prev, tags: updatedTags } : prev));
+      setNotes((prev) =>
+        prev.map((n) => (n.id === noteId ? { ...n, tags: updatedTags } : n))
+      );
+
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
@@ -249,9 +274,13 @@ alert(data.map(tag => tag.name).join(", "));
   
     try {
       const updatedTags = await removeTag(token!, noteId, tagName);
-//      setTags(updatedTags.map((name) => ({ name })));
-//      setTags(updatedTags.tags || []);
+
       setTags(updatedTags || []);
+      setSelected((prev) => (prev ? { ...prev, tags: updatedTags } : prev));
+      setNotes((prev) =>
+        prev.map((n) => (n.id === noteId ? { ...n, tags: updatedTags } : n))
+      );
+
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
@@ -322,7 +351,7 @@ alert(data.map(tag => tag.name).join(", "));
           <div className="flex justify-between items-center">
 
             <h2 className="font-semibold text-lg">
-              {selected ? selected.title : "新しいノート"}
+              {selected ? selected.title : "New Note..."}
             </h2>
             {!isEditing && selected && (
               <button onClick={handleDelete} className="text-red-600 hover:text-red-800">
@@ -398,10 +427,10 @@ alert(data.map(tag => tag.name).join(", "));
               className="w-full h-full border rounded p-2 focus:outline-none"
               value={draft}
               onChange={handleChange}
-              onBlur={() => {
-                setIsEditing(false);
-                handleSave();                            // フォーカスが外れたとき自動保存
-              }}
+//              onBlur={() => {
+//                setIsEditing(false);
+//                handleSave();                            // フォーカスが外れたとき自動保存
+//              }}
               placeholder="ここにノートを書き始めましょう..."
               autoFocus
             />
@@ -413,83 +442,110 @@ alert(data.map(tag => tag.name).join(", "));
         <div className="px-4 py-3 border-t bg-gray-50">
           <div className="font-semibold text-sm mb-1">添付ファイル</div>
 
-          {attachments?.length > 0 ? (
+          {attachments?.length > 0 && (
+
+
             <ul className="list-disc list-inside text-sm">
               {attachments.map((f) => (
-                <li key={f.id} className="flex items-center justify-between">
-                  {/*
-                  <a
-                    href={f.url}
-                    target="_blank"
-                    className="text-blue-600 underline break-all"
-                  >
-                    {f.filename}
-                  </a>
-                  */}
 
-                  <button
-                    onClick={() => setPreviewFile(f)}
-                    className="text-blue-600 underline break-all text-left hover:text-blue-800" >
-                    {f.filename}
-                  </button>
+                <li key={f.id} className="flex items-center justify-between">
 
                   <button
                     onClick={() => handleDeleteAttachment(f.id, f.filename)}
-                    className="ml-2 text-red-500 hover:text-red-700"
-                    title="削除" >
+                    className="mr-2 px-2 py-0.5 rounded cursor-pointer hover:bg-red-500"
+                    title="削除">
                     🗑️
                   </button>
+            
+                  <button
+                    onClick={() => setPreviewFile(f)}
+                    className="text-blue-600 underline break-all text-left hover:text-blue-800 flex-1" >
+                    {f.filename}
+                  </button>
+
                 </li>
               ))}
             </ul>
-          ) : (
-            <div className="text-sm text-gray-400">添付なし</div>
           )}
         
-          {/* ← 編集モード関係なく常にファイル追加を出す
-        
-       
-          {/* ← 編集モード関係なく常にファイル追加を出す */}
+          {/* 添付ファイル追加 */}
           <div className="mt-2">
-            <input
-              type="file"
-              multiple
-              onChange={(e) => {
-                const files = Array.from(e.target.files || []);
-                setDraftFiles(files);
-                e.target.value = ""; 
-              }}
-              className="text-sm"
-            />
-  
+
             {draftFiles.length > 0 && selected?.id && (
-              <div className="mt-2">
-                <ul className="list-disc list-inside text-sm mb-2">
+
+              <div className="mt-2 mb-4 flex items-start gap-4">
+
+                <button
+                  onClick={handleSaveAttachment}
+                  className="bg-blue-500 text-white text-sm px-2 py-0.5 rounded hover:bg-blue-600" >
+                  📤
+                </button>
+              
+                <ul className="list-disc list-inside text-sm mb-0">
                   {draftFiles.map((f) => (
                     <li key={f.name}>{f.name}</li>
                   ))}
                 </ul>
-  
-                <button
-                  onClick={handleSaveAttachment}
-                  className="bg-blue-500 text-white text-sm px-3 py-1 rounded hover:bg-blue-600"
-                >
-                  📤 アップロード
-                </button>
               </div>
+
             )}
+
+            <div className="flex items-center gap-3">
+              {/* 見た目用のカスタムボタン */}
+              <label
+                htmlFor="fileInput"
+                className="bg-gray-200 text-gray-800 text-sm px-2 py-0.5 rounded cursor-pointer hover:bg-gray-300"
+              >
+                📁 ファイル選択
+              </label>
+
+              {/* ファイル選択の実体（非表示） */}
+              <input
+                id="fileInput"
+                type="file"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  setDraftFiles(files);
+                  e.target.value = "";
+                }}
+                className="hidden"
+              />
+
+              {/* 選択状態の表示 */}
+              <span className="text-sm text-gray-600">
+                {draftFiles.length > 0
+                  ? `${draftFiles.length} 件選択中`
+                  : "選択されていません"}
+              </span>
+            </div>
+
+
+
           </div>
 
         </div>
         
 
-        {/* フッター
+        {/* フッター */}
         <div className="p-3 border-t flex justify-end items-center space-x-3">
+
+        {!isEditing ? (
+          <button
+            onClick={() => setIsEditing(true)}
+            className="bg-gray-200 px-3 py-1 rounded hover:bg-gray-300">
+          ✏️  編集
+          </button>
+        ) : (
+          <button
+            onClick={handleSave}
+            className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
+            💾 保存
+          </button>
+        )}
         </div>
-        */}
 
       </div>
-
 
       {previewFile && (
         <div
