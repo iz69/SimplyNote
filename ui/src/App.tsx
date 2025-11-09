@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getNotes, createNote, updateNote, deleteNote, saveNote } from "./api";
 import { saveAttachments, removeAttachment, getAllTags, addTag, removeTag } from "./api";
+import { importNotes, exportNotes } from "./api";
 
 export default function App() {
 
@@ -30,6 +31,8 @@ export default function App() {
   const [isFocused, setIsFocused] = useState(false);
 
   const [showTrashOnly, setShowTrashOnly] = useState(false);    // ゴミ箱表示
+
+  const [showMenu, setShowMenu] = useState(false);
 
   // フィルタ済みノート一覧を生成
   const filteredNotes = notes.filter((note) => {
@@ -424,6 +427,53 @@ export default function App() {
     }
   };
 
+  // インポート
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+
+    const file = e.target.files?.[0];
+    if (!file) return;
+  
+    try {
+      const result = await importNotes(token!, file);
+      alert(result.message);
+      await fetchNotes(); // インポート後に一覧更新
+    } catch (err: any) {
+      if (err.message === "unauthorized") {
+        localStorage.removeItem("token");
+        window.location.href = `${BASE_PATH}/login`;
+      } else {
+        console.error(err);
+        alert("Import failed.");
+      }
+    } finally {
+      e.target.value = "";
+    }
+  };
+
+  // エクスポート
+  const handleExport = async () => {
+    try {
+      const blob = await exportNotes(token!);
+      const url = window.URL.createObjectURL(blob);
+  
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `simplynotes_export_${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+  
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      if (err.message === "unauthorized") {
+        localStorage.removeItem("token");
+        window.location.href = `${BASE_PATH}/login`;
+      } else {
+        console.error(err);
+        alert("エクスポートに失敗しました。");
+      }
+    }
+  };
+
+
   // ログアウト
   const handleLogout = () => {
     localStorage.removeItem("token"); // トークン削除
@@ -433,11 +483,26 @@ export default function App() {
   // ------------------------------------------------------------
   // 初回処理
   // ------------------------------------------------------------
+
   useEffect(() => {
     fetchNotes();
     fetchTags();
   }, []);
 
+  // ------------------------------------------------------------
+  // UIイベントリスナー
+  // ------------------------------------------------------------
+
+  useEffect(() => {
+
+    const handleClickOutside = (e) => {
+      if (!e.target.closest(".menu-area")) setShowMenu(false);
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+
+  }, []);
+  
   // ------------------------------------------------------------
   // UI 表示
   // ------------------------------------------------------------
@@ -448,12 +513,82 @@ export default function App() {
       <div className="w-1/3 border-r border-gray-300 flex flex-col">
 
         {/* ヘッダー */}
+        {/*
         <div className="p-3 border-b flex justify-between items-center">
           <h1 className="font-semibold text-lg">All Notes</h1>
           <button onClick={handleNew} className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600">
             ＋ 新規
           </button>
         </div>
+        */}
+
+        <div className="p-3 border-b flex justify-between items-center relative menu-area">
+
+          {/* 左：メニュー＋タイトル */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="px-2 py-1 text-gray-600 hover:text-gray-900"
+              title="メニュー"
+            >
+              ☰
+            </button>
+
+            <h2 className="font-semibold text-lg">All Notes</h2>
+          </div>
+
+          {/* 右：操作ボタン */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleNew}
+              className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600" >
+              ＋ 新規
+            </button>
+          </div>
+
+          {/* 隠し file input */}
+          <input
+            id="importInput"
+            type="file"
+            accept=".zip"
+            style={{ display: "none" }}
+            onChange={handleImport}
+          />
+
+          {/* ドロップダウンメニュー */}
+          {showMenu && (
+            <div
+              className="absolute top-12 left-3 bg-white border border-gray-200 rounded-lg shadow-lg z-10 
+                         transition-all duration-150 transform origin-top" >
+
+              <button
+                className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                onClick={() => {
+                  document.getElementById("importInput").click();
+                  setShowMenu(false);
+                }}
+              >
+                📂 Import
+              </button>
+
+              <button
+                className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                onClick={() => {
+                  handleExport();
+                  setShowMenu(false);
+                }}
+              >
+                💾 Export
+              </button>
+
+            </div>
+          )}
+        </div>
+
+
+
+
+
 
         {/* 検索バー */}
         <div className="border-t border-b-2 relative">

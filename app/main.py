@@ -1,15 +1,17 @@
 from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 from .database import init_db, get_connection
 from .models import NoteCreate, NoteUpdate, NoteOut
 from .auth import hash_password, router as auth_router, oauth2_scheme
 from .config import load_config
-import os, logging, shutil, uuid
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
+import os, logging, shutil, uuid
 import unicodedata
+import io, zipfile
 
 BASE_PATH = os.getenv("BASE_PATH", "/").rstrip("/") + "/"
 
@@ -587,3 +589,108 @@ def search_notes(q: str, token: str = Depends(oauth2_scheme)):
         results.append(d)
 
     return {"results": results}
+
+
+# -----------------------------------------------------------------------
+
+@app.post("/import")
+async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2_scheme)):
+
+    if not file.filename.endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Only ZIP files are supported.")
+
+    content = await file.read()
+    imported = 0
+    skipped = 0
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    if config["user_mode"] == "single":
+        user_id = 1
+    else:
+        current_user = get_current_user(token)
+        user_id = current_user.id
+
+    with zipfile.ZipFile(io.BytesIO(content)) as zf:
+
+        for info in zf.infolist():
+            if not (info.filename.endswith(".txt") or info.filename.endswith(".md")):
+                skipped += 1
+                continue
+
+            try:
+                text = zf.read(info.filename).decode("utf-8")
+            except UnicodeDecodeError:
+                skipped += 1
+                continue
+
+            name = info.filename.rsplit("/", 1)[-1]
+            title = name.rsplit(".", 1)[0]
+
+            # 重複スキップ
+            cur.execute(
+                "SELECT id FROM notes WHERE user_id=? AND title=?",
+                (user_id, title),
+            )
+            if cur.fetchone():
+                skipped += 1
+                continue
+
+            # ZipInfo.date_time は (YYYY, MM, DD, HH, MM, SS)
+            dt = datetime(*info.date_time).isoformat()
+
+            cur.execute(
+                "INSERT INTO notes (user_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                (user_id, title, text, dt, dt),
+            )
+            imported += 1
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "imported": imported,
+        "skipped": skipped,
+        "message": f"{imported} notes imported successfully, {skipped} skipped.",
+    }
+
+
+@app.get("/export")
+def export_notes(token: str = Depends(oauth2_scheme)):
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # ユーザー特定
+    if config["user_mode"] == "single":
+        user_id = 1
+    else:
+        current_user = get_current_user(token)
+        user_id = current_user.id
+
+    # ノート一覧取得
+    cur.execute("SELECT title, content FROM notes WHERE user_id=?", (user_id,))
+    rows = cur.fetchall()
+    conn.close()
+
+    # ZIP作成
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for row in rows:
+            title = row["title"].strip() or "untitled"
+            title = title.replace("/", "_")  # ディレクトリ区切りの防止
+            text = row["content"] or ""
+            zf.writestr(f"{title}.txt", text)
+
+    buffer.seek(0)
+
+    today = datetime.now().strftime("%Y%m%d")
+    headers = {
+        "Content-Disposition": f'attachment; filename="simplynote_export_{today}.zip"'
+    }
+
+    return StreamingResponse(buffer, media_type="application/zip", headers=headers)
+
+
+

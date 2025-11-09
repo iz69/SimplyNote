@@ -247,4 +247,38 @@ export async function removeAttachment(
   return refreshed;
 }
 
+// -------------------------
 
+export async function importNotes(token: string, zipFile: File): Promise<{
+  imported: number;
+  skipped: number;
+  message: string;
+}> {
+  const formData = new FormData();
+  formData.append("file", zipFile);
+
+  const res = await fetch(`${API_URL}/import`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("import_error");
+
+  return res.json();
+}
+
+export async function exportNotes(token: string): Promise<Blob> {
+  const res = await fetch(`${API_URL}/export`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("export_error");
+
+  return await res.blob(); // ZIPをバイナリで受け取る
+}
