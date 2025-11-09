@@ -114,17 +114,8 @@ export default function App() {
   // --------------------
 
   const handleSelect = (note: Note) => {
-
     setIsCreating(false);
-
     setSelected(note);
-//
-//    setDraft(note.content);
-//    setDraftTitle(note.title || "");
-//    setAttachments(note.files || []);
-//    setDraftFiles([]);
-//    setTags(note.tags || []);
-
     setIsEditing(false);
     setIsEditingTitle(false);
   };
@@ -148,23 +139,12 @@ export default function App() {
         if (selected) {
           const updated = await updateNote(token, selected.id, { title: selected.title, content: value });
           setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
-
           setSelected(updated);
-//          setDraftTitle(updated.title || "");
-//          setAttachments(updated.files || []);
-//          setDraftFiles([]);
-//          setTags(updated.tags || []);
-
         } else if (value.trim() !== "") {
           const title = value.split("\n")[0].slice(0, 30) || "New Note...";
           const created = await createNote(token, { title, content: value });
           setNotes((prev) => [created, ...prev]);
-
           setSelected(created);
-//          setDraftTitle(created.title || "");
-//          setAttachments(created.files || []);
-//          setDraftFiles([]);
-//          setTags(created.tags || []);
         }
       } catch (err) {
         console.error("Auto save failed:", err);
@@ -185,11 +165,6 @@ export default function App() {
       if (data.length > 0) {
         const first = data[0];
         setSelected(first);
-//        setDraft(first.content);
-//        setDraftTitle(first.title || "");
-//        setAttachments(first.files || []);
-//        setDraftFiles([]);
-//        setTags(first.tags || []); 
       }
     } catch (err: any) {
       if (err.message === "unauthorized") {
@@ -223,40 +198,12 @@ export default function App() {
     }
   };
 
-  // タグで絞り込み
-  /*
-  const fetchNotesByTag = async (tagName: string) => {
-    try {
-      const data = await getNotesByTag(token!, tagName);
-      setNotes(data);
-      setSelected(data[0] || null);
-//      setDraft(data[0]?.content || "");
-//      setAttachments(data[0]?.files || []);
-//      setTags(data[0].tags || []);
-
-    } catch (err: any) {
-      if (err.message === "unauthorized") {
-        localStorage.removeItem("token");
-        window.location.href = `${BASE_PATH}/login`;
-      } else {
-        console.error(err);
-        alert("ノートの取得に失敗しました。");
-      }
-    }
-  };
-  */
- 
   // 新規作成（空ノートを開く）
   const handleNew = () => {
 
     setIsCreating(true);
     setSelected(null);
 
-//    setDraft("");
-//    setDraftTitle("");
-//    setAttachments([]);
-//    setDraftFiles([]);
-//    setTags([]);
     setIsEditing(true);
     setIsEditingTitle(false);
   };
@@ -272,10 +219,6 @@ export default function App() {
       setNotes((prev) =>
         prev.map((n) => (n.id === updated.id ? updated : n))
       );
-//      setDraftTitle(updated.title || "");
-//      setAttachments(updated.files || []);
-//      setDraftFiles([]);
-//      setTags(updated.tags || []);
 
       setIsEditing(false);
       setIsEditingTitle(false);
@@ -312,11 +255,6 @@ export default function App() {
       await deleteNote(token!, selected.id);
       setNotes((prev) => prev.filter((n) => n.id !== selected.id));
       setSelected(null);
-//      setDraft("");
-//      setDraftTitle("");
-//      setAttachments([]);
-//      setDraftFiles([]);
-//      setTags([]);
       setIsEditing(false);
       setIsEditingTitle(false);
 
@@ -394,7 +332,6 @@ export default function App() {
       const updatedTags = await addTag(token!, noteId, tagName.trim());
 
       setTags(updatedTags || []);
-//      setSelected((prev) => (prev ? { ...prev, tags: updatedTags } : prev));
       setNotes((prev) =>
         prev.map((n) => (n.id === noteId ? { ...n, tags: updatedTags } : n))
       );
@@ -422,7 +359,6 @@ export default function App() {
       const updatedTags = await removeTag(token!, noteId, tagName);
 
       setTags(updatedTags || []);
-//      setSelected((prev) => (prev ? { ...prev, tags: updatedTags } : prev));
       setNotes((prev) =>
         prev.map((n) => (n.id === noteId ? { ...n, tags: updatedTags } : n))
       );
@@ -596,11 +532,6 @@ export default function App() {
           )}
         </div>
 
-
-
-
-
-
         {/* 検索バー */}
         <div className="border-t border-b-2 relative">
 
@@ -766,7 +697,6 @@ export default function App() {
               />
             )}
 
-
             {selected && (
               showTrashOnly ? (
                 <button onClick={handleDelete} className="text-red-600 hover:text-red-800"> 
@@ -819,9 +749,6 @@ export default function App() {
               ))}
       
             </div>
-
-
-
           )}
         </div>
   
@@ -946,7 +873,6 @@ export default function App() {
           )}
 
         </div>
-        
 
         {/* フッター
         {isEditing && (
@@ -959,7 +885,6 @@ export default function App() {
           </div>
         )}
         */}
-
 
         {/* フッター */}
         <div className="p-3 border-t flex justify-end items-center space-x-3">
@@ -977,7 +902,6 @@ export default function App() {
             </button>
           )}
         </div>
-
 
       </div>
 
@@ -1034,4 +958,3 @@ export default function App() {
     </div>
  );
 }
-
