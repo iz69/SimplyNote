@@ -528,13 +528,25 @@ def get_all_tags(token: str = Depends(oauth2_scheme)):
     return tags
 
 def cleanup_unused_tags(cur):
+
+    # 削除済みノートに紐づいた note_tags を削除
+    cur.execute("""
+        DELETE FROM note_tags
+        WHERE note_id NOT IN (SELECT id FROM notes)
+    """)
+    deleted_note_tags = cur.rowcount
+    if deleted_note_tags > 0:
+        logging.getLogger("tags").info(f"🧹 Deleted {deleted_note_tags} orphaned note_tags")
+
+    # どの note_tags にも使われていないタグを削除
     cur.execute("""
         DELETE FROM tags
         WHERE id NOT IN (SELECT DISTINCT tag_id FROM note_tags)
     """)
-    deleted = cur.rowcount
-    if deleted > 0:
-        logging.getLogger("tags").info(f"🧹 Deleted {deleted} unused tags")
+    deleted_tags = cur.rowcount
+    if deleted_tags > 0:
+        logging.getLogger("tags").info(f"🧽 Deleted {deleted_tags} unused tags")
+
 
 # -----------------------------------------------------------------------
 

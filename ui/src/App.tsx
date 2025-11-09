@@ -24,13 +24,53 @@ export default function App() {
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState("");
 
+  const [allTags, setAllTags] = useState<Tag[]>([]);      // API から取得する全タグ
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showTagList, setShowTagList] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // フィルタ済みノート一覧を生成
+  const filteredNotes = notes.filter((note) => {
+
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+
+    // テキスト条件
+    const textPart = q.replace(/#[^\s#]+/g, "").trim();
+
+    // テキスト条件：タイトル or 本文に含まれる
+    const matchText =
+      textPart === "" ||
+      note.title.toLowerCase().includes(textPart) ||
+      note.content.toLowerCase().includes(textPart);
+
+    // タグ条件
+    const tagsInQuery = q.match(/#[^\s#]+/g)?.map(t => t.slice(1)) ?? [];
+
+    // タグ条件：すべてのタグを含むノートのみ
+    const matchTags =
+      tagsInQuery.length === 0 ||
+      tagsInQuery.every(tag =>
+        note.tags?.some(t => t.toLowerCase() === tag)
+      );
+
+    // 両方をANDで評価
+    return matchTags && matchText;
+  });
+
   const handleSelect = (note: Note) => {
     setSelected(note);
+
     setIsEditing(false);
     setDraft(note.content);
     setDraftFiles([]);
     setAttachments(note.files || []);
     setTags(note.tags || []);
+
+    setIsEditingTitle(false);
+    setDraftTitle(note.title || "");
   };
 
   // --------------------
@@ -92,14 +132,11 @@ export default function App() {
   };
 
   // タグ一覧を取得
-  /*
   const fetchTags = async () => {
     try {
       const data = await getAllTags(token!);
       // data は [{ name: "仕事", note_count: 3 }, ...]
-
-alert(data.map(tag => tag.name).join(", "));
-
+      setAllTags(data);
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
@@ -110,7 +147,6 @@ alert(data.map(tag => tag.name).join(", "));
       }
     }
   };
-  */
 
   // タグで絞り込み
   const fetchNotesByTag = async (tagName: string) => {
@@ -303,7 +339,7 @@ alert(data.map(tag => tag.name).join(", "));
   // ------------------------------------------------------------
   useEffect(() => {
     fetchNotes();
-//    fetchTags();
+    fetchTags();
   }, []);
 
   // ------------------------------------------------------------
@@ -323,14 +359,91 @@ alert(data.map(tag => tag.name).join(", "));
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          {notes.map((note) => (
-            <div key={note.id} onClick={() => handleSelect(note)} className={`p-3 cursor-pointer border-b hover:bg-gray-100 ${selected?.id === note.id ? "bg-gray-200" : ""}`} >
+        {/* 検索バー */}
+        <div className="border-t border-b-2 relative">
+
+          <input
+            type="text"
+            placeholder="Filter by text / #tag..."
+            value={searchQuery}
+            onChange={(e) => {
+              const v = e.target.value;
+              setSearchQuery(v);
+
+              // 「#」を含んでいてフォーカス中なら TagList 表示
+              if (isFocused && v.includes("#")) {
+                setShowTagList(true);
+              } else {
+                setShowTagList(false);
+              }
+
+            }}
+            onFocus={() => {
+              setIsFocused(true);
+              if (searchQuery.includes("#")) setShowTagList(true);
+            }}
+            onBlur={() => {
+              setIsFocused(false);
+            }}
+
+            className="w-full border-none px-3 py-2 outline-none bg-transparent"
+          />
+
+          {/* タグ候補（#で始まる時だけ出す） */}
+          {isFocused && searchQuery.includes("#") && showTagList && (
+            <div className="absolute left-0 right-0 top-full bg-gray-50 border border-gray-300 rounded-b max-h-32 overflow-y-auto z-10 text-sm shadow-sm">
+  
+              {allTags
+                .map((tag) => (
+                  <div
+                    key={tag.name}
+  
+                    onMouseDown={(e) => {
+                      e.preventDefault(); // inputにフォーカスを戻さない
+                      setSearchQuery(prev => {
+  
+                        // すでに同じタグが含まれていたら追加しない
+                        if (prev.includes(`#${tag.name}`)) return prev;
+  
+                        // 最後の単語が "#" の場合はそこに補完
+                        if (prev.trim().endsWith("#")) {
+                          return prev.trim() + tag.name + " ";
+                        }
+  
+                        // 通常は末尾に追記
+                        return `${prev.trim()} #${tag.name} `;
+                      });
+                    }}
+  
+                    className="px-2 py-1 hover:bg-gray-100 cursor-pointer" >
+                    #{tag.name} ({tag.note_count ?? 0})
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+
+        {/* フィルタ済みノート一覧 */}
+        <div className="flex-1 border-b overflow-y-auto">
+
+          {filteredNotes.map((note) => (
+            <div
+              key={note.id}
+              onClick={() => handleSelect(note)}
+              className={`p-3 cursor-pointer border-b hover:bg-gray-100 ${
+                selected?.id === note.id ? "bg-gray-200" : ""
+              }`}
+            >
               <div className="font-medium">{note.title}</div>
-              <div className="text-sm text-gray-500">{note.updated_at?.slice(0, 10)}</div>
+              <div className="text-sm text-gray-500">
+                {note.updated_at?.slice(0, 10)}
+              </div>
             </div>
           ))}
+  
         </div>
+
+
 
         {/* フッター */}
         <div className="p-3 border-t mt-auto">
@@ -350,10 +463,42 @@ alert(data.map(tag => tag.name).join(", "));
           {/* ヘッダー タイトル＋削除ボタン */}
           <div className="flex justify-between items-center">
 
-            <h2 className="font-semibold text-lg">
-              {selected ? selected.title : "New Note..."}
-            </h2>
-            {!isEditing && selected && (
+            {!isEditingTitle ? (
+              // 表示モード
+              <h2
+                className="font-semibold text-lg cursor-pointer"
+                onClick={() => setIsEditingTitle(true)} >
+                {selected ? selected.title : "New Note..."}
+              </h2>
+            ) : (
+              // 編集モード
+              <input
+                type="text"
+                className="font-semibold text-lg border-b border-gray-300 focus:outline-none focus:border-blue-400 flex-grow mr-2"
+                value={draftTitle}
+                onChange={(e) => setDraftTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    setDraftTitle(e.target.value)
+                    selected.title = e.target.value
+                    handleSave()
+                    setIsEditingTitle(false)
+                  } else if (e.key === "Escape") {
+                    setIsEditingTitle(false)
+                    setDraftTitle(selected?.title || "")
+                  }
+                }}
+                onBlur={() => {
+                  // フォーカスが外れたらキャンセル扱い
+                  setIsEditingTitle(false)
+                  setDraftTitle(selected?.title || "")
+                }}
+                autoFocus
+              />
+            )}
+
+
+            {selected && (
               <button onClick={handleDelete} className="text-red-600 hover:text-red-800">
                 🗑️ 削除
               </button>
@@ -363,45 +508,45 @@ alert(data.map(tag => tag.name).join(", "));
           {/* ヘッダー タグ */}
           {selected && (
  
-            <div className="mt-2">
-              <div className="flex flex-wrap items-center gap-2">
- 
-                {/* タグ追加 */}
-                <input
-                  type="text"
-                  value={newTagInput}
-                  onChange={(e) => setNewTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault(); // フォーム送信防止
-                      const value = newTagInput.trim();
-                      if (value && selected?.id) {
-                        handleAddTag(selected.id, value);
-                        setNewTagInput("");
-                      }
-                    }
-                  }}
-                  onBlur={() => {
-                    // フォーカスが外れたらキャンセル（入力だけクリア）
-                    setNewTagInput("");
-                  }}
-                  placeholder="タグを追加..."
-                  className="border rounded px-2 py-1 mt-2"
-                />
+            <div className="flex flex-wrap items-center gap-2 mt-2">
 
-                {/* タグ一覧 */}
-                {tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-2 py-1 bg-gray-200 rounded cursor-pointer hover:bg-gray-300"
-                    onClick={() => handleRemoveTag(selected.id, tag)}
-                  >
-                    #{tag}
-                  </span>
-                ))}
-        
-              </div>
+              {/* タグ追加 */}
+              <input
+                type="text"
+                value={newTagInput}
+                onChange={(e) => setNewTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault(); // フォーム送信防止
+                    const value = newTagInput.trim();
+                    if (value && selected?.id) {
+                      handleAddTag(selected.id, value);
+                      setNewTagInput("");
+                    }
+                  }
+                }}
+                onBlur={() => {
+                  // フォーカスが外れたらキャンセル（入力だけクリア）
+                  setNewTagInput("");
+                }}
+                placeholder="タグを追加..."
+                className="border rounded px-2 py-1 text-sm w-25 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+
+              {/* タグ一覧 */}
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="px-2 py-1 bg-gray-200 rounded cursor-pointer hover:bg-gray-300 text-sm"
+                  onClick={() => handleRemoveTag(selected.id, tag)}
+                >
+                  #{tag}
+                </span>
+              ))}
+      
             </div>
+
+
+
           )}
         </div>
   
@@ -427,10 +572,13 @@ alert(data.map(tag => tag.name).join(", "));
               className="w-full h-full border rounded p-2 focus:outline-none"
               value={draft}
               onChange={handleChange}
-//              onBlur={() => {
-//                setIsEditing(false);
-//                handleSave();                            // フォーカスが外れたとき自動保存
-//              }}
+
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setIsEditing(false)
+                }
+              }}
+
               placeholder="ここにノートを書き始めましょう..."
               autoFocus
             />
@@ -528,22 +676,16 @@ alert(data.map(tag => tag.name).join(", "));
         
 
         {/* フッター */}
-        <div className="p-3 border-t flex justify-end items-center space-x-3">
-
-        {!isEditing ? (
-          <button
-            onClick={() => setIsEditing(true)}
-            className="bg-gray-200 px-3 py-1 rounded hover:bg-gray-300">
-          ✏️  編集
-          </button>
-        ) : (
-          <button
-            onClick={handleSave}
-            className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
-            💾 保存
-          </button>
+        {isEditing && (
+          <div className="p-3 border-t flex justify-start items-center space-x-3">
+            <button
+              onClick={handleSave}
+              className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
+              💾 保存
+            </button>
+          </div>
         )}
-        </div>
+
 
       </div>
 

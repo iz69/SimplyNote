@@ -5,25 +5,14 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-//  const BASE_PATH = import.meta.env.BASE_PATH || "";
-//  const BASE_PATH = ".";
-
-//  const pathParts = window.location.pathname.split("/").filter(Boolean);
-//  const BASE_PATH = pathParts.length > 0 ? "/" + pathParts[0] : "";
-
   const BASE_PATH = import.meta.env.VITE_BASE_PATH || "";
-
-//  console.log("🧭 Login.tsx BASE_PATH =", BASE_PATH);
-
   const API_URL = import.meta.env.VITE_API_URL || "/api";
-  console.log("🧭 Login.tsx API_URL =", API_URL);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
     try {
-//      const res = await fetch(`${BASE_PATH}/auth/token`, {
       const res = await fetch(`${API_URL}/auth/token`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
