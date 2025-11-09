@@ -9,6 +9,7 @@ import os, logging, shutil, uuid
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
+import unicodedata
 
 BASE_PATH = os.getenv("BASE_PATH", "/").rstrip("/") + "/"
 
@@ -447,10 +448,12 @@ def add_tag(note_id: int, tag: dict, token: str = Depends(oauth2_scheme)):
         conn.close()
         raise HTTPException(status_code=404, detail="Note not found")
 
-    tag_name = tag.get("name")
+#    tag_name = tag.get("name")
+    tag_name = normalize_tag_name( tag.get("name") )
     if not tag_name:
         conn.close()
         raise HTTPException(status_code=400, detail="Tag name required")
+
 
     # タグがなければ作成
     cur.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag_name,))
@@ -526,6 +529,16 @@ def get_all_tags(token: str = Depends(oauth2_scheme)):
 
     conn.close()
     return tags
+
+def normalize_tag_name(name: str) -> str:
+
+    if not name:
+        return ""
+
+    # Unicode正規化で半角 >> 全角、全角英数 >> 半角を統一
+    normalized = unicodedata.normalize("NFKC", name)
+    # 前後の空白を除去し、英字は大文字化
+    return normalized.strip().upper()
 
 def cleanup_unused_tags(cur):
 

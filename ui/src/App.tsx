@@ -29,12 +29,21 @@ export default function App() {
   const [showTagList, setShowTagList] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [showTrashOnly, setShowTrashOnly] = useState(false);    // ゴミ箱表示
 
   // フィルタ済みノート一覧を生成
   const filteredNotes = notes.filter((note) => {
 
     const q = searchQuery.trim().toLowerCase();
+
+    const isTrash = note.tags?.some(t => t.toLowerCase() === "trash");
+  
+    // ゴミ箱モードなら Trash のみ表示
+    if (showTrashOnly) return isTrash;
+  
+    // 通常モードでは Trash を除外
+    if (isTrash) return false;
+
     if (!q) return true;
 
     // テキスト条件
@@ -60,17 +69,54 @@ export default function App() {
     return matchTags && matchText;
   });
 
+  // 表示リストが変わったら、先頭のノートを自動選択
+  useEffect(() => {
+    if (filteredNotes.length === 0) {
+      setSelected(null);
+      return;
+    }
+  
+    // 現在の選択ノートが filteredNotes に含まれていれば維持
+    const exists = filteredNotes.some(n => n.id === selected?.id);
+    if (!exists) {
+      setSelected(filteredNotes[0]);
+    }
+  }, [filteredNotes]);
+  
+  // 選択ノートが変わったら表示を更新
+  useEffect(() => {
+
+    if (!selected) {
+      setDraft("");
+      setDraftTitle("");
+      setAttachments([]);
+      setDraftFiles([]);
+      setTags([]);
+      return;
+    }
+  
+    setDraft(selected.content);
+    setDraftTitle(selected.title || "");
+    setAttachments(selected.files || []);
+    setDraftFiles([]);
+    setTags(selected.tags || []);
+
+  }, [selected]);
+ 
+  // --------------------
+
   const handleSelect = (note: Note) => {
+
     setSelected(note);
+//
+//    setDraft(note.content);
+//    setDraftTitle(note.title || "");
+//    setAttachments(note.files || []);
+//    setDraftFiles([]);
+//    setTags(note.tags || []);
 
     setIsEditing(false);
-    setDraft(note.content);
-    setDraftFiles([]);
-    setAttachments(note.files || []);
-    setTags(note.tags || []);
-
     setIsEditingTitle(false);
-    setDraftTitle(note.title || "");
   };
 
   // --------------------
@@ -92,12 +138,23 @@ export default function App() {
         if (selected) {
           const updated = await updateNote(token, selected.id, { title: selected.title, content: value });
           setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
+
           setSelected(updated);
+//          setDraftTitle(updated.title || "");
+//          setAttachments(updated.files || []);
+//          setDraftFiles([]);
+//          setTags(updated.tags || []);
+
         } else if (value.trim() !== "") {
           const title = value.split("\n")[0].slice(0, 30) || "New Note...";
           const created = await createNote(token, { title, content: value });
           setNotes((prev) => [created, ...prev]);
+
           setSelected(created);
+//          setDraftTitle(created.title || "");
+//          setAttachments(created.files || []);
+//          setDraftFiles([]);
+//          setTags(created.tags || []);
         }
       } catch (err) {
         console.error("Auto save failed:", err);
@@ -117,9 +174,11 @@ export default function App() {
       if (data.length > 0) {
         const first = data[0];
         setSelected(first);
-        setDraft(first.content);
-        setAttachments(first.files || []);
-        setTags(first.tags || []); 
+//        setDraft(first.content);
+//        setDraftTitle(first.title || "");
+//        setAttachments(first.files || []);
+//        setDraftFiles([]);
+//        setTags(first.tags || []); 
       }
     } catch (err: any) {
       if (err.message === "unauthorized") {
@@ -136,7 +195,12 @@ export default function App() {
     try {
       const data = await getAllTags(token!);
       // data は [{ name: "仕事", note_count: 3 }, ...]
-      setAllTags(data);
+
+      // Trash を除外（大文字・小文字を無視）
+      const filtered = data.filter(tag => tag.name.toLowerCase() !== "trash");
+
+      setAllTags(filtered);
+
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
@@ -149,14 +213,15 @@ export default function App() {
   };
 
   // タグで絞り込み
+  /*
   const fetchNotesByTag = async (tagName: string) => {
     try {
       const data = await getNotesByTag(token!, tagName);
       setNotes(data);
       setSelected(data[0] || null);
-      setDraft(data[0]?.content || "");
-      setAttachments(data[0]?.files || []);
-      setTags(data[0].tags || []);
+//      setDraft(data[0]?.content || "");
+//      setAttachments(data[0]?.files || []);
+//      setTags(data[0].tags || []);
 
     } catch (err: any) {
       if (err.message === "unauthorized") {
@@ -168,12 +233,18 @@ export default function App() {
       }
     }
   };
+  */
  
   // 新規作成（空ノートを開く）
   const handleNew = () => {
     setSelected(null);
-    setDraft("");
+//    setDraft("");
+//    setDraftTitle("");
+//    setAttachments([]);
+//    setDraftFiles([]);
+//    setTags([]);
     setIsEditing(true);
+    setIsEditingTitle(false);
   };
  
   // 保存
@@ -187,12 +258,13 @@ export default function App() {
       setNotes((prev) =>
         prev.map((n) => (n.id === updated.id ? updated : n))
       );
-      setAttachments(updated.files || []);
-//      setTags((updated.tags || []).map((name) => ({ name })));
-      setTags(updated.tags || []);
+//      setDraftTitle(updated.title || "");
+//      setAttachments(updated.files || []);
+//      setDraftFiles([]);
+//      setTags(updated.tags || []);
 
-      setDraftFiles([]);
       setIsEditing(false);
+      setIsEditingTitle(false);
 
     } catch (err: any) {
       if (err.message === "unauthorized") {
@@ -204,17 +276,36 @@ export default function App() {
       }
     }
   };
-  
+ 
+  // ゴミ箱に移動
+  const handleRemove = async () => {
+
+    if (!selected || !selected.id) return;
+    if (selected.tags?.some(t => t.toLowerCase() === "trash")) return;
+
+    if (!confirm("このノートをゴミ箱に移動しますか？")) return;
+
+    await handleAddTag( selected.id, "Trash" );
+  }
+ 
   // 削除
   const handleDelete = async () => {
-    if (!selected) return;
+
+    if (!selected || !selected.id) return;
     if (!confirm("このノートを削除しますか？")) return;
+
     try {
       await deleteNote(token!, selected.id);
       setNotes((prev) => prev.filter((n) => n.id !== selected.id));
       setSelected(null);
-      setDraft("");
+//      setDraft("");
+//      setDraftTitle("");
+//      setAttachments([]);
+//      setDraftFiles([]);
+//      setTags([]);
       setIsEditing(false);
+      setIsEditingTitle(false);
+
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
@@ -261,11 +352,12 @@ export default function App() {
 
     try {
 
-//      await deleteAttachment(token!, attachmentId);         // これはファイル消すだけ
       const updated = await removeAttachment(token!, selected.id, attachmentId);
 
+      setDraftFiles([]);
       setAttachments(updated.files || []);
-      setSelected(updated);
+
+      // 更新
       setNotes((prev) =>
         prev.map((n) => (n.id === updated.id ? updated : n))
       );
@@ -288,10 +380,13 @@ export default function App() {
       const updatedTags = await addTag(token!, noteId, tagName.trim());
 
       setTags(updatedTags || []);
-      setSelected((prev) => (prev ? { ...prev, tags: updatedTags } : prev));
+//      setSelected((prev) => (prev ? { ...prev, tags: updatedTags } : prev));
       setNotes((prev) =>
         prev.map((n) => (n.id === noteId ? { ...n, tags: updatedTags } : n))
       );
+
+      // タグ一覧の再取得
+      await fetchTags();
 
     } catch (err: any) {
       if (err.message === "unauthorized") {
@@ -306,13 +401,14 @@ export default function App() {
   
   // タグ削除
   const handleRemoveTag = async (noteId: number, tagName: string) => {
-    if (!confirm(`タグ「${tagName}」を削除しますか？`)) return;
+
+//    if (!confirm(`タグ「${tagName}」を削除しますか？`)) return;
   
     try {
       const updatedTags = await removeTag(token!, noteId, tagName);
 
       setTags(updatedTags || []);
-      setSelected((prev) => (prev ? { ...prev, tags: updatedTags } : prev));
+//      setSelected((prev) => (prev ? { ...prev, tags: updatedTags } : prev));
       setNotes((prev) =>
         prev.map((n) => (n.id === noteId ? { ...n, tags: updatedTags } : n))
       );
@@ -443,14 +539,28 @@ export default function App() {
   
         </div>
 
-
-
         {/* フッター */}
-        <div className="p-3 border-t mt-auto">
-          <button onClick={handleLogout} className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
+
+        <div className="p-3 border-t mt-auto flex justify-between items-center">
+          {/* 左：ログアウトボタン */}
+          <button
+            onClick={handleLogout}
+            className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+          >
             ログアウト
           </button>
+
+          {/* 右：Trashボタン */}
+          <button
+            onClick={() => setShowTrashOnly(prev => !prev)}
+            className={`flex items-center gap-1 px-3 py-1 rounded ${
+              showTrashOnly ? "bg-red-500 text-white" : "bg-gray-200 hover:bg-gray-300"
+            }`}
+          >
+            🗑 Trash
+          </button>
         </div>
+
 
       </div>
 
@@ -499,9 +609,15 @@ export default function App() {
 
 
             {selected && (
-              <button onClick={handleDelete} className="text-red-600 hover:text-red-800">
-                🗑️ 削除
-              </button>
+              showTrashOnly ? (
+                <button onClick={handleDelete} className="text-red-600 hover:text-red-800"> 
+                  🗑️ 完全削除
+                </button>
+              ) : (
+                <button onClick={handleRemove} className="text-red-600 hover:text-red-800">
+                  🗑️ 削除
+                </button>
+              )
             )}
           </div>
   
