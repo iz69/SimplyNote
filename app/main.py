@@ -15,30 +15,44 @@ import io, zipfile
 
 BASE_PATH = os.getenv("BASE_PATH", "/").rstrip("/") + "/"
 
-# ------------------------------------------------------------
-# Middleware
-# ------------------------------------------------------------
-class RootPathFromXForwardedPrefix:
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        headers = dict(scope.get("headers") or [])
-        prefix = None
-        for k, v in headers.items():                # ヘッダーは小文字・バイト列なので注意
-            if k == b"x-forwarded-prefix":
-                prefix = v.decode()
-                break
-        if prefix:
-            scope["root_path"] = prefix             # FastAPI がこれを見てルートを補正する
-        await self.app(scope, receive, send)
+## # ------------------------------------------------------------
+## # Middleware
+## # ------------------------------------------------------------
+## class RootPathFromXForwardedPrefix:
+##     def __init__(self, app):
+##         self.app = app
+## 
+##     async def __call__(self, scope, receive, send):
+##         headers = dict(scope.get("headers") or [])
+##         prefix = None
+##         for k, v in headers.items():                # ヘッダーは小文字・バイト列なので注意
+##             if k == b"x-forwarded-prefix":
+##                 prefix = v.decode()
+##                 break
+##         if prefix:
+##             scope["root_path"] = prefix             # FastAPI がこれを見てルートを補正する
+##         await self.app(scope, receive, send)
 
 # ------------------------------------------------------------
 # FastAPI
 # ------------------------------------------------------------
-app = FastAPI(title="SimplyNote API")
+## app = FastAPI(title="SimplyNote API")
 
-app.add_middleware(RootPathFromXForwardedPrefix)
+## app = FastAPI( title="SimplyNote API", root_path=BASE_PATH )
+
+app = FastAPI(
+    title="SimplyNote API",
+#    docs_url=None,
+    swagger_ui_parameters={
+        "url": f"{BASE_PATH}/openapi.json",
+    },
+    servers=[
+        {"url": BASE_PATH.rstrip("/")},
+    ],
+)
+
+## app.add_middleware(RootPathFromXForwardedPrefix)
+
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 
 app.add_middleware(
@@ -74,6 +88,19 @@ async def debug_request(request: Request, call_next):
     response = await call_next(request)
     return response
 
+
+
+#####
+@app.middleware("http")
+async def debug_static_paths(request, call_next):
+    global upload_dir
+    if "/files/" in request.url.path:
+        logger.info(f"##### Static request path: {request.url.path}")
+    response = await call_next(request)
+    return response
+
+
+
 # ------------------------------------------------------------
 # Startup
 # ------------------------------------------------------------
@@ -106,7 +133,7 @@ def startup():
 
     for route in app.routes:
         if hasattr(route, "app") and isinstance(route.app, StaticFiles):
-            logger.info("=== StaticFiles mount  name: {route.name}, path: {route.path}, directory: {route.app.directory}")
+            logger.info(f"=== StaticFiles mount  name: {route.name}, path: {route.path}, directory: {route.app.directory}")
 
 # ------------------------------------------------------------
 # Notes CRUD
@@ -158,7 +185,8 @@ def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(
             {
                 "id": fid,
                 "filename": fname,
-                "url": f"{request.base_url}{BASE_PATH}files/{stored}",
+#                "url": f"{request.base_url}{BASE_PATH}files/{stored}",
+                "url": f"/files/{stored}",
             }
             for fid, fname, stored in cur2.fetchall()
         ]
@@ -199,7 +227,8 @@ def get_note(note_id: int, request: Request, token: str = Depends(oauth2_scheme)
         {
             "id": fid,
             "filename": fname,
-            "url": f"{request.base_url}{BASE_PATH}files/{stored}"
+#            "url": f"{request.base_url}{BASE_PATH}files/{stored}",
+            "url": f"/files/{stored}",
         }
         for fid, fname, stored in cur.fetchall()
     ]
@@ -265,7 +294,8 @@ def update_note(note_id: int, note: NoteUpdate, request: Request, token: str = D
     # 添付ファイル情報を取得
     cur.execute("SELECT id, filename_original, filename_stored FROM attachments WHERE note_id=?", (note_id,))
     files = [
-        {"id": fid, "filename": fname, "url": f"{request.base_url}{BASE_PATH}files/{stored}"}
+#        {"id": fid, "filename": fname, "url": f"{request.base_url}{BASE_PATH}files/{stored}"}
+        {"id": fid, "filename": fname, "url": f"/files/{stored}"}
         for fid, fname, stored in cur.fetchall()
     ]
 
@@ -376,7 +406,8 @@ def upload_attachment( note_id: int, request: Request, file: UploadFile = File(.
     return {
         "id": attachment_id,
         "filename": file.filename,
-        "url": f"{request.base_url}{BASE_PATH}files/{safe_name}",
+#        "url": f"{request.base_url}{BASE_PATH}files/{safe_name}",
+        "url": f"/files/{safe_name}",
     }
 
 @app.delete("/attachments/{attachment_id}")

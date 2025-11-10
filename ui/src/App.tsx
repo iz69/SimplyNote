@@ -10,6 +10,9 @@ export default function App() {
 
   const BASE_PATH = import.meta.env.VITE_BASE_PATH || "";
 
+  const API_URL = import.meta.env.VITE_API_URL || "/api";
+  const API_BASE = new URL(API_URL, window.location.origin).toString();
+
   const [notes, setNotes] = useState<Note[]>([]);
   const [selected, setSelected] = useState<Note | null>(null);
 
@@ -493,7 +496,7 @@ export default function App() {
             </button>
           </div>
 
-          {/* 隠し file input */}
+          {/* 隠し importfile input */}
           <input
             id="importInput"
             type="file"
@@ -920,13 +923,15 @@ export default function App() {
       
             {previewFile.filename.match(/\.(png|jpe?g|gif|webp)$/i) ? (
               <img
-                src={previewFile.url}
+//                src={previewFile.url}
+                src={`${API_BASE}${previewFile.url}`}
                 alt={previewFile.filename}
                 className="max-w-full max-h-[70vh] object-contain mx-auto"
               />
             ) : previewFile.filename.match(/\.(pdf)$/i) ? (
               <iframe
-                src={previewFile.url}
+//                src={previewFile.url}
+                src={`${API_BASE}${previewFile.url}`}
                 className="w-full h-[70vh]"
                 title={previewFile.filename}
               />
@@ -936,7 +941,8 @@ export default function App() {
                   このファイルはプレビューできません。
                 </p>
                 <a
-                  href={previewFile.url}
+//                  href={previewFile.url}
+                  href={`${API_BASE}${previewFile.url}`}
                   target="_blank"
                   className="text-blue-600 underline"
                 >
