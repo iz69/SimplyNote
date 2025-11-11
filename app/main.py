@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
 from .database import init_db, get_connection
 from .models import NoteCreate, NoteUpdate, NoteOut
-from .auth import hash_password, router as auth_router, oauth2_scheme
+from .auth import get_current_user, hash_password, router as auth_router, oauth2_scheme
 from .config import load_config
 from pathlib import Path
 from datetime import datetime
@@ -77,28 +77,38 @@ logger = logging.getLogger("simplynote")
 @app.middleware("http")
 async def debug_request(request: Request, call_next):
     logger.info(f"=== URL DEBUG INFO ===")
-    logger.info(f"=== method     {request.method}")
-    logger.info(f"=== url.path   {request.url.path}")
-    logger.info(f"=== url.query  {request.url.query}")
-    logger.info(f"=== base_url   {request.base_url}")
-    logger.info(f"=== x-forwarded-prefix {request.headers.get('x-forwarded-prefix')}")
-    logger.info(f"=== scope.root_path {request.scope.get('root_path')}")
-    logger.info(f"=== scope.path {request.scope.get('path')}")
-    logger.info(f"=== BASE_PATH  {BASE_PATH}")
+#    logger.info(f"=== method     {request.method}")
+#    logger.info(f"=== url.path   {request.url.path}")
+#    logger.info(f"=== url.query  {request.url.query}")
+#    logger.info(f"=== base_url   {request.base_url}")
+#    logger.info(f"=== x-forwarded-prefix {request.headers.get('x-forwarded-prefix')}")
+#    logger.info(f"=== scope.root_path {request.scope.get('root_path')}")
+#    logger.info(f"=== scope.path {request.scope.get('path')}")
+#    logger.info(f"=== BASE_PATH  {BASE_PATH}")
     response = await call_next(request)
     return response
 
 
 
 #####
-@app.middleware("http")
-async def debug_static_paths(request, call_next):
-    global upload_dir
-    if "/files/" in request.url.path:
-        logger.info(f"##### Static request path: {request.url.path}")
-    response = await call_next(request)
-    return response
+##@app.middleware("http")
+##async def debug_static_paths(request, call_next):
+##    global upload_dir
+##    if "/files/" in request.url.path:
+##        logger.info(f"##### Static request path: {request.url.path}")
+##    response = await call_next(request)
+##    return response
 
+
+##@app.middleware("http")
+##async def log_request_body(request: Request, call_next):
+##    if request.method == "PUT" and "/notes/" in request.url.path:
+##        body = await request.body()
+##        print("=== RAW BODY ===")
+##        print(body.decode("utf-8"))
+##        print("================")
+##    response = await call_next(request)
+##    return response
 
 
 # ------------------------------------------------------------
@@ -247,7 +257,8 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
     cur = conn.cursor()
 
     current_user = get_current_user(token)
-    user_id = current_user.id
+#    user_id = current_user.id
+    user_id = current_user["id"]
 
     # ノート本体
     cur.execute(
@@ -270,21 +281,35 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
         "updated_at": now,
     }
 
-
 @app.put("/notes/{note_id}", response_model=NoteOut)
-def update_note(note_id: int, note: NoteUpdate, request: Request, token: str = Depends(oauth2_scheme)):
+def update_note(
+    note_id: int,
+    note: NoteUpdate,
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+):
+
+#    logger.info(f"[update_note] note_id={note_id}")
+#    logger.info(f"[update_note] raw_note={note}")
+#    logger.info(f"[update_note] title={getattr(note, 'title', None)} content_len={len(getattr(note, 'content', '') or '')}")
 
     now = datetime.utcnow().isoformat()
     conn = get_connection()
     cur = conn.cursor()
 
     current_user = get_current_user(token)
-    user_id = current_user.id
+#    user_id = current_user.id
+    user_id = current_user["id"]
+
+#    logger.info(f"[update_note] user_id={user_id}")
 
     cur.execute("SELECT id FROM notes WHERE id=?", (note_id,))
     if not cur.fetchone():
         conn.close()
+        logger.warning(f"[update_note] note {note_id} not found for user {user_id}")
         raise HTTPException(status_code=404, detail="Note not found")
+
+#    logger.info(f"[update_note] updated note_id={note_id}")
 
     cur.execute(
         "UPDATE notes SET title=?, content=?, updated_at=? WHERE id=? AND user_id=?",
@@ -299,9 +324,13 @@ def update_note(note_id: int, note: NoteUpdate, request: Request, token: str = D
         for fid, fname, stored in cur.fetchall()
     ]
 
+#    logger.info(f"[update_note] files={files}")
+
     # タグ情報を取得
     cur.execute("SELECT t.name FROM tags t JOIN note_tags nt ON t.id = nt.tag_id WHERE nt.note_id = ?", (note_id,))
     tags = [row[0] for row in cur.fetchall()]
+
+#    logger.info(f"[update_note] tags={tags}")
 
     conn.commit()
     conn.close()
@@ -614,7 +643,8 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
     cur = conn.cursor()
 
     current_user = get_current_user(token)
-    user_id = current_user.id
+#    user_id = current_user.id
+    user_id = current_user["id"]
 
     with zipfile.ZipFile(io.BytesIO(content)) as zf:
 
@@ -667,7 +697,8 @@ def export_notes(token: str = Depends(oauth2_scheme)):
     cur = conn.cursor()
 
     current_user = get_current_user(token)
-    user_id = current_user.id
+#    user_id = current_user.id
+    user_id = current_user["id"]
 
     # ノート一覧取得
     cur.execute("SELECT title, content FROM notes WHERE user_id=?", (user_id,))

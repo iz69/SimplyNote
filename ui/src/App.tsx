@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from "react";
-import { FilePlus } from "lucide-react";
+import { FilePlus, Clock } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { refreshAccessToken } from "./api";
 import { getNotes, createNote, updateNote, deleteNote, saveNote } from "./api";
 import { saveAttachments, removeAttachment, getAllTags, addTag, removeTag } from "./api";
 import { importNotes, exportNotes } from "./api";
@@ -38,6 +39,8 @@ export default function App() {
   const [showTrashOnly, setShowTrashOnly] = useState(false);    // ゴミ箱表示
 
   const [showMenu, setShowMenu] = useState(false);
+
+  const [unsavedNoteIds, setUnsavedNoteIds] = useState<number[]>([]);  // 未保存アイコン
 
   // フィルタ済みノート一覧を生成
   const filteredNotes = notes.filter((note) => {
@@ -125,12 +128,64 @@ export default function App() {
 
   // --------------------
 
+  // JWT の exp を読み取る関数を App.tsx に追加
+  function parseJwtExp(token) {
+    try {
+      const base64Url = token.split(".")[1];
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const payload = JSON.parse(atob(base64));
+      return payload.exp ? payload.exp * 1000 : null; // ms
+    } catch {
+      return null;
+    }
+  }
+  
+  function msUntilExpiry(token) {
+    const expMs = parseJwtExp(token);
+    return expMs ? expMs - Date.now() : null;
+  }
+
+  useEffect(() => {
+    async function scheduleRefresh() {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+  
+      const ms = msUntilExpiry(token);
+      if (ms == null) return;
+  
+      // 有効期限の1分前を狙ってリフレッシュ
+      const ahead = Math.max(5000, ms - 60_000);
+  
+      setTimeout(async () => {
+        try {
+          await refreshAccessToken();
+          scheduleRefresh();  // 更新後も次のスケジュールを再設定
+        } catch (err) {
+          console.error("Token refresh failed", err);
+          localStorage.removeItem("token");
+          localStorage.removeItem("refresh_token");
+          window.location.href = `${BASE_PATH}/login`;
+        }
+      }, ahead);
+    }
+  
+    scheduleRefresh();
+  }, []);
+
+  // --------------------
+
   // 入力保存タイマー
   const saveTimer = useRef<NodeJS.Timeout | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setDraft(value);
+
+    if (selected?.id) {
+      setUnsavedNoteIds((prev) =>
+        prev.includes(selected.id) ? prev : [...prev, selected.id]
+      );
+    }
 
     // 入力のたびにタイマーをリセット
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -143,6 +198,9 @@ export default function App() {
           const updated = await updateNote(token, selected.id, { title: selected.title, content: value });
           setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
           setSelected(updated);
+
+          setUnsavedNoteIds((prev) => prev.filter((id) => id !== updated.id));            
+
         } else if (value.trim() !== "") {
           const title = value.split("\n")[0].slice(0, 30) || "New Note...";
           const created = await createNote(token, { title, content: value });
@@ -214,6 +272,8 @@ export default function App() {
   // 保存
   const handleSave = async () => {
 
+    if (!selected) return;
+
     try {
 
       const updated = await saveNote( token!, selected, draft );
@@ -222,6 +282,9 @@ export default function App() {
       setNotes((prev) =>
         prev.map((n) => (n.id === updated.id ? updated : n))
       );
+
+      // ✅ 手動保存完了 → 未保存フラグを解除
+      setUnsavedNoteIds((prev) => prev.filter((id) => id !== updated.id));
 
       setIsEditing(false);
       setIsEditingTitle(false);
@@ -611,8 +674,21 @@ export default function App() {
               }`}
             >
 
+              {/*
               <div className="font-medium truncate overflow-hidden whitespace-nowrap">
                 {note.title}
+              </div>
+              */}
+
+              <div className="font-medium flex items-center justify-between">
+                <span className="truncate max-w-[85%]">{note.title}</span>
+                {unsavedNoteIds.includes(note.id) && (
+                  <Clock
+                    size={16}
+                    className="text-orange-500 animate=pulse shrink-0 ml-2 flex-none"
+                    title="未保存"
+                  />
+                )}
               </div>
 
               <div className="text-sm text-gray-500 flex items-center flex-wrap gap-1">

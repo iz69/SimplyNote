@@ -22,7 +22,9 @@ export default function Login() {
       if (!res.ok) throw new Error("ログイン失敗");
 
       const data = await res.json();
+
       localStorage.setItem("token", data.access_token);
+      localStorage.setItem("refresh_token", data.refresh_token);
 
       // メイン画面へ遷移
       window.location.href = `${BASE_PATH}/`;

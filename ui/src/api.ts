@@ -24,6 +24,24 @@ const authHeaders = (token: string) => ({
 
 // -------------------------
 
+export async function refreshAccessToken() {
+  const refreshToken = localStorage.getItem("refresh_token");
+  if (!refreshToken) throw new Error("no_refresh_token");
+
+  const res = await fetch(`${API_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+
+  if (!res.ok) throw new Error("refresh_failed");
+  const { access_token } = await res.json();
+  localStorage.setItem("token", access_token);
+  return access_token;
+}
+
+// -------------------------
+
 export async function getNotes(token: string): Promise<Note[]> {
   const res = await fetch(`${API_URL}/notes`, { headers: { Authorization: `Bearer ${token}` } });
   if (res.status === 401) throw new Error("unauthorized");
