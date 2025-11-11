@@ -547,7 +547,18 @@ export default function App() {
               ☰
             </button>
 
+            {/*
             <h2 className="font-semibold text-lg">All Notes</h2>
+            */}
+
+            {/* All Notes + 件数 */}
+            <h2 className="font-semibold text-lg flex items-baseline">
+              <span>Notes</span>
+              <span className="ml-2 text-sm text-gray-500">
+                ({filteredNotes.length})
+              </span>
+            </h2>
+
           </div>
 
           {/* 右：操作ボタン */}

@@ -88,7 +88,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         "token_type": "bearer"
     }
 
-@router.post("/auth/refresh")
+## @router.post("/auth/refresh")
+@router.post("/refresh")
 def refresh_token(payload: dict):
 
     refresh_token = payload.get("refresh_token")

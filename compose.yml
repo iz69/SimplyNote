@@ -15,6 +15,7 @@ services:
       - ADMIN_USER=msktoge
       - ADMIN_PASS=bassist1
       - BASE_PATH=/simplynote-api
+      - SWAGGER_API_DOCS=true
 
 
   simplynote-ui:
