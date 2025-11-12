@@ -1,0 +1,31 @@
+services:
+
+  simplynote-api:
+    container_name: simplynote-api
+    build: .
+    ports:
+      - "18888:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      - ADMIN_USER=admin
+      - ADMIN_PASS=password
+      - BASE_PATH=/simplynote-api
+      - SWAGGER_API_DOCS=false
+
+  simplynote-ui:
+    container_name: simplynote-ui
+    image: node:20
+    ports:
+      - "15173:5173"
+    volumes:
+      - ./ui:/ui
+    depends_on:
+      - simplynote-api
+    working_dir: /ui
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+#    command: sh -c "npm install && npm run build"
+    environment:
+      - VITE_BASE_PATH=/simplynote
+      - VITE_API_URL=/simplynote-api
+
