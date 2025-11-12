@@ -561,11 +561,22 @@ export default function App() {
 
           </div>
 
-          {/* 右：操作ボタン */}
           <div className="flex items-center space-x-2">
+          
+            {/* 更新ボタン */}
+            <button
+              onClick={() => {
+                fetchNotes();
+                fetchTags();
+              }} className="bg-blue-200 text-white px-1 py-1 rounded hover:bg-blue-600" title="更新" >
+              🔄
+            </button>
+
+
+            {/* 新規ボタン */}
             <button
               onClick={handleNew}
-              className="bg-green-500 text-white px-2 py-2 rounded hover:bg-green-600" >
+              className="bg-green-500 text-white px-2 py-2 rounded hover:bg-green-600" title="新規" >
               <FilePlus className="w-4 h-4" />
             </button>
           </div>

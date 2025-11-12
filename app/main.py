@@ -2,18 +2,20 @@ from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
+
+#from .database import init_db, init_users, get_connection
 from .database import init_db, get_connection
 from .models import NoteCreate, NoteUpdate, NoteOut
-from .auth import get_current_user, hash_password, router as auth_router, oauth2_scheme
+#from .auth import get_current_user, hash_password, router as auth_router, oauth2_scheme
+from .auth import get_current_user, init_users, oauth2_scheme, router as auth_router
 from .config import load_config
+
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
 import os, logging, shutil, uuid
 import unicodedata
 import io, zipfile, re
-
-BASE_PATH = os.getenv("BASE_PATH", "/").rstrip("/") + "/"
 
 ## # ------------------------------------------------------------
 ## # Middleware
@@ -40,6 +42,9 @@ BASE_PATH = os.getenv("BASE_PATH", "/").rstrip("/") + "/"
 
 ## app = FastAPI( title="SimplyNote API", root_path=BASE_PATH )
 
+# 環境変数から BASE_PATH を取得
+base_path = os.getenv("BASE_PATH", "/").rstrip("/") + "/"
+
 # 環境変数で Swagger の有効・無効を制御
 swagger_enabled = os.getenv("SWAGGER_API_DOCS", "true").lower() not in ["false", "0", "no"]
 
@@ -48,10 +53,10 @@ app = FastAPI(
     docs_url=None if not swagger_enabled else "/docs",
     redoc_url=None if not swagger_enabled else "/redoc",
     swagger_ui_parameters={
-        "url": f"{BASE_PATH}/openapi.json",
+        "url": f"{base_path}/openapi.json",
     },
     servers=[
-        {"url": BASE_PATH.rstrip("/")},
+        {"url": base_path.rstrip("/")},
     ],
 )
 
@@ -120,25 +125,37 @@ logger = logging.getLogger("simplynote")
 # ------------------------------------------------------------
 @app.on_event("startup")
 def startup():
-    init_db()
-    conn = get_connection()
-    cur = conn.cursor()
 
+    init_db(config)
+
+#    admin_user = os.getenv("ADMIN_USER", "admin").strip()
+#    admin_pass = os.getenv("ADMIN_PASS", "password").strip()[:72]
+#
+#    if admin_user and admin_pass:
+#        cur.execute("SELECT id FROM users WHERE username=?", (admin_user,))
+#        if not cur.fetchone():
+#            cur.execute(
+#                "INSERT INTO users (username, password, created_at) VALUES (?, ?, ?)",
+#                (admin_user, hash_password(admin_pass), datetime.utcnow().isoformat()),
+#            )
+#            conn.commit()
+#            logger.info(f"✅ Created default admin user: {admin_user}")
+#
+#    conn.close()
+
+    # DBユーザ
+    users = config.get("users", [])
     admin_user = os.getenv("ADMIN_USER", "admin").strip()
     admin_pass = os.getenv("ADMIN_PASS", "password").strip()[:72]
-
     if admin_user and admin_pass:
-        cur.execute("SELECT id FROM users WHERE username=?", (admin_user,))
-        if not cur.fetchone():
-            cur.execute(
-                "INSERT INTO users (username, password, created_at) VALUES (?, ?, ?)",
-                (admin_user, hash_password(admin_pass), datetime.utcnow().isoformat()),
-            )
-            conn.commit()
-            logger.info(f"✅ Created default admin user: {admin_user}")
+        users.append({
+            "username": admin_user,
+            "password": admin_pass,
+            "role": "admin"
+        })
+    init_users(users)
 
-    conn.close()
-
+    # 添付ファイルの保存ディレクトリ
     upload_dir = os.path.abspath(config["upload"]["dir"])
     os.makedirs(upload_dir, exist_ok=True)
     logger.info(f"📂 File storage initialized: {upload_dir}")
@@ -199,7 +216,6 @@ def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(
             {
                 "id": fid,
                 "filename": fname,
-#                "url": f"{request.base_url}{BASE_PATH}files/{stored}",
                 "url": f"/files/{stored}",
             }
             for fid, fname, stored in cur2.fetchall()
@@ -241,7 +257,6 @@ def get_note(note_id: int, request: Request, token: str = Depends(oauth2_scheme)
         {
             "id": fid,
             "filename": fname,
-#            "url": f"{request.base_url}{BASE_PATH}files/{stored}",
             "url": f"/files/{stored}",
         }
         for fid, fname, stored in cur.fetchall()
@@ -323,7 +338,6 @@ def update_note(
     # 添付ファイル情報を取得
     cur.execute("SELECT id, filename_original, filename_stored FROM attachments WHERE note_id=?", (note_id,))
     files = [
-#        {"id": fid, "filename": fname, "url": f"{request.base_url}{BASE_PATH}files/{stored}"}
         {"id": fid, "filename": fname, "url": f"/files/{stored}"}
         for fid, fname, stored in cur.fetchall()
     ]
@@ -439,7 +453,6 @@ def upload_attachment( note_id: int, request: Request, file: UploadFile = File(.
     return {
         "id": attachment_id,
         "filename": file.filename,
-#        "url": f"{request.base_url}{BASE_PATH}files/{safe_name}",
         "url": f"/files/{safe_name}",
     }
 

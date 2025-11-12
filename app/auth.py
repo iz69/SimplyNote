@@ -112,3 +112,46 @@ def refresh_token(payload: dict):
 
     return {"access_token": new_access_token, "token_type": "bearer"}
 
+
+def init_users(users):
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # 現在のユーザ一覧を取得
+    cur.execute("SELECT username, role FROM users")
+    existing_users = cur.fetchall()
+
+    existing_usernames = {row[0] for row in existing_users}
+    keep_usernames = {u.get("username", "").strip() for u in users if u.get("username")}
+
+    # DB上に存在するが users に載っていない一般ユーザを削除
+    to_delete = [u for u in existing_users if u[1] == "user" and u[0] not in keep_usernames]
+    for username, _ in to_delete:
+        cur.execute("DELETE FROM users WHERE username=?", (username,))
+        logger.info(f"🗑️ Deleted user: {username}")
+
+    # users に載っているが DB に存在しないユーザを追加
+    for u in users:
+        username = u.get("username", "").strip()
+        password = u.get("password", "").strip()[:72]
+        role = u.get("role", "user")
+
+        if not username or not password:
+            continue
+
+        cur.execute("SELECT id FROM users WHERE username=?", (username,))
+        if cur.fetchone():
+            continue
+
+        cur.execute(
+            "INSERT INTO users (username, password, role, created_at) VALUES (?, ?, ?, ?)",
+            (username, hash_password(password), role, datetime.utcnow().isoformat()),
+        )
+
+    conn.commit()
+    conn.close()
+
+
+
+

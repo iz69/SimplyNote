@@ -14,7 +14,10 @@ DEFAULT_CONFIG = {
     },
     "logging": {
         "level": "INFO"
-    }
+    },
+#    "users": [
+#        {"username": "user",  "password": "user_pass"},
+#    ]
 }
 
 def load_config():

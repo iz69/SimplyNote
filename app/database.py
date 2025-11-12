@@ -1,23 +1,52 @@
-import sqlite3
-import os
+import os, sqlite3
 from datetime import datetime
-from .config import load_config
+from pathlib import Path
 
-config = load_config()
+#from .config import load_config
+#config = load_config()
+#
+#if config["database"]["type"] == "sqlite":
+#    DB_PATH = config["database"]["path"]
+#else:
+#    raise NotImplementedError(f"Unsupported database type: {config['database']['type']}")
 
-if config["database"]["type"] == "sqlite":
-    DB_PATH = config["database"]["path"]
-else:
-    raise NotImplementedError(f"Unsupported database type: {config['database']['type']}")
+_config = None
 
 def get_connection():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10.0, check_same_thread=False)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.row_factory = sqlite3.Row  # 辞書形式で取得
-    return conn
 
-def init_db():
+    if _config is None:
+        raise RuntimeError("init_db(config) が呼ばれていません")
+
+    db_cfg = _config.get("database", {})
+    db_type = db_cfg.get("type", "sqlite")
+
+#    if _config["database"]["type"] == "sqlite":
+
+    if db_type == "sqlite":
+
+        db_path = Path(db_cfg.get("path", "./data/simplynote.db"))
+
+        ## db_path = _config["database"]["path"]
+        ## os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+        db_path = Path(db_cfg.get("path", "./data/simplynote.db"))
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        conn = sqlite3.connect(db_path, timeout=10.0, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.row_factory = sqlite3.Row  # 辞書形式で取得
+
+        return conn
+
+    else:
+        raise NotImplementedError(f"Unsupported database type: {db_type}")
+
+
+def init_db(config):
+
+    global _config
+    _config = config
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -26,6 +55,7 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
+        role TEXT DEFAULT 'user',
         created_at TEXT NOT NULL
     )
     """)
@@ -104,4 +134,5 @@ def init_db():
 
     conn.commit()
     conn.close()
+
 
