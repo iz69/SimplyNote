@@ -2,14 +2,6 @@ import os, sqlite3
 from datetime import datetime
 from pathlib import Path
 
-#from .config import load_config
-#config = load_config()
-#
-#if config["database"]["type"] == "sqlite":
-#    DB_PATH = config["database"]["path"]
-#else:
-#    raise NotImplementedError(f"Unsupported database type: {config['database']['type']}")
-
 _config = None
 
 def get_connection():
@@ -19,8 +11,6 @@ def get_connection():
 
     db_cfg = _config.get("database", {})
     db_type = db_cfg.get("type", "sqlite")
-
-#    if _config["database"]["type"] == "sqlite":
 
     if db_type == "sqlite":
 
@@ -100,7 +90,9 @@ def init_db(config):
     )
     """)
 
-    # -----------------------------
+    # -------------------------------------------
+    # 全文検索用インデックス (未使用)
+    # -------------------------------------------
 
     cur.execute("""
     CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(

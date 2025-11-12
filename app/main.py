@@ -3,10 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
 
-#from .database import init_db, init_users, get_connection
 from .database import init_db, get_connection
 from .models import NoteCreate, NoteUpdate, NoteOut
-#from .auth import get_current_user, hash_password, router as auth_router, oauth2_scheme
 from .auth import get_current_user, init_users, oauth2_scheme, router as auth_router
 from .config import load_config
 
@@ -17,30 +15,9 @@ import os, logging, shutil, uuid
 import unicodedata
 import io, zipfile, re
 
-## # ------------------------------------------------------------
-## # Middleware
-## # ------------------------------------------------------------
-## class RootPathFromXForwardedPrefix:
-##     def __init__(self, app):
-##         self.app = app
-## 
-##     async def __call__(self, scope, receive, send):
-##         headers = dict(scope.get("headers") or [])
-##         prefix = None
-##         for k, v in headers.items():                # ヘッダーは小文字・バイト列なので注意
-##             if k == b"x-forwarded-prefix":
-##                 prefix = v.decode()
-##                 break
-##         if prefix:
-##             scope["root_path"] = prefix             # FastAPI がこれを見てルートを補正する
-##         await self.app(scope, receive, send)
-
 # ------------------------------------------------------------
 # FastAPI
 # ------------------------------------------------------------
-## app = FastAPI(title="SimplyNote API")
-
-## app = FastAPI( title="SimplyNote API", root_path=BASE_PATH )
 
 # 環境変数から BASE_PATH を取得
 base_path = os.getenv("BASE_PATH", "/").rstrip("/") + "/"
@@ -60,8 +37,6 @@ app = FastAPI(
     ],
 )
 
-## app.add_middleware(RootPathFromXForwardedPrefix)
-
 app.include_router( auth_router, prefix="/auth", tags=["auth"] )
 
 app.add_middleware(
@@ -79,9 +54,8 @@ config = load_config()
 logging.basicConfig(level=config["logging"]["level"])
 logger = logging.getLogger("simplynote")
 
-
 # ------------------------------------------------------------
-# App.Middleware
+# App.Middleware (for debug)
 # ------------------------------------------------------------
 #@app.middleware("http")
 #async def debug_request(request: Request, call_next):
@@ -97,29 +71,6 @@ logger = logging.getLogger("simplynote")
 #    response = await call_next(request)
 #    return response
 
-
-
-#####
-##@app.middleware("http")
-##async def debug_static_paths(request, call_next):
-##    global upload_dir
-##    if "/files/" in request.url.path:
-##        logger.info(f"##### Static request path: {request.url.path}")
-##    response = await call_next(request)
-##    return response
-
-
-##@app.middleware("http")
-##async def log_request_body(request: Request, call_next):
-##    if request.method == "PUT" and "/notes/" in request.url.path:
-##        body = await request.body()
-##        print("=== RAW BODY ===")
-##        print(body.decode("utf-8"))
-##        print("================")
-##    response = await call_next(request)
-##    return response
-
-
 # ------------------------------------------------------------
 # Startup
 # ------------------------------------------------------------
@@ -127,21 +78,6 @@ logger = logging.getLogger("simplynote")
 def startup():
 
     init_db(config)
-
-#    admin_user = os.getenv("ADMIN_USER", "admin").strip()
-#    admin_pass = os.getenv("ADMIN_PASS", "password").strip()[:72]
-#
-#    if admin_user and admin_pass:
-#        cur.execute("SELECT id FROM users WHERE username=?", (admin_user,))
-#        if not cur.fetchone():
-#            cur.execute(
-#                "INSERT INTO users (username, password, created_at) VALUES (?, ?, ?)",
-#                (admin_user, hash_password(admin_pass), datetime.utcnow().isoformat()),
-#            )
-#            conn.commit()
-#            logger.info(f"✅ Created default admin user: {admin_user}")
-#
-#    conn.close()
 
     # DBユーザ
     users = config.get("users", [])
@@ -276,7 +212,6 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
     cur = conn.cursor()
 
     current_user = get_current_user(token)
-#    user_id = current_user.id
     user_id = current_user["id"]
 
     # ノート本体
@@ -308,27 +243,18 @@ def update_note(
     token: str = Depends(oauth2_scheme),
 ):
 
-#    logger.info(f"[update_note] note_id={note_id}")
-#    logger.info(f"[update_note] raw_note={note}")
-#    logger.info(f"[update_note] title={getattr(note, 'title', None)} content_len={len(getattr(note, 'content', '') or '')}")
-
     now = datetime.utcnow().isoformat()
     conn = get_connection()
     cur = conn.cursor()
 
     current_user = get_current_user(token)
-#    user_id = current_user.id
     user_id = current_user["id"]
-
-#    logger.info(f"[update_note] user_id={user_id}")
 
     cur.execute("SELECT id FROM notes WHERE id=?", (note_id,))
     if not cur.fetchone():
         conn.close()
         logger.warning(f"[update_note] note {note_id} not found for user {user_id}")
         raise HTTPException(status_code=404, detail="Note not found")
-
-#    logger.info(f"[update_note] updated note_id={note_id}")
 
     cur.execute(
         "UPDATE notes SET title=?, content=?, updated_at=? WHERE id=? AND user_id=?",
@@ -342,13 +268,9 @@ def update_note(
         for fid, fname, stored in cur.fetchall()
     ]
 
-#    logger.info(f"[update_note] files={files}")
-
     # タグ情報を取得
     cur.execute("SELECT t.name FROM tags t JOIN note_tags nt ON t.id = nt.tag_id WHERE nt.note_id = ?", (note_id,))
     tags = [row[0] for row in cur.fetchall()]
-
-#    logger.info(f"[update_note] tags={tags}")
 
     conn.commit()
     conn.close()
@@ -380,8 +302,8 @@ def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
     cur.execute("DELETE FROM notes WHERE id=?", (note_id,))
     deleted = cur.rowcount
 
-    # 不要タグを削除
-    cleanup_unused_tags(cur)
+    # 不要タグ・ゴミ箱メンテナンス
+    run_maintenance(cur)
 
     conn.commit()
     conn.close()
@@ -518,8 +440,8 @@ def add_tag(note_id: int, tag: dict, token: str = Depends(oauth2_scheme)):
 
     conn.commit()
 
-    # 不要タグを削除
-    cleanup_unused_tags(cur)
+    # 不要タグ・ゴミ箱メンテナンス
+    run_maintenance(cur)
 
     # 現在のタグ一覧を返す
     cur.execute("""
@@ -551,8 +473,8 @@ def remove_tag(note_id: int, tag_name: str, token: str = Depends(oauth2_scheme))
     cur.execute("DELETE FROM note_tags WHERE note_id=? AND tag_id=?", (note_id, tag_id))
     conn.commit()
 
-    # 不要タグを削除
-    cleanup_unused_tags(cur)
+    # 不要タグ・ゴミ箱メンテナンス
+    run_maintenance(cur)
 
     # 現在のタグ一覧を返す
     cur.execute("""
@@ -584,38 +506,18 @@ def get_all_tags(token: str = Depends(oauth2_scheme)):
     return tags
 
 # タグの正規化
+# Unicode正規化で半角 >> 全角、全角英数 >> 半角を統一
+# 前後の空白を除去し、英字は大文字化
 def normalize_tag_name(name: str) -> str:
 
     if not name:
         return ""
 
-    # Unicode正規化で半角 >> 全角、全角英数 >> 半角を統一
     normalized = unicodedata.normalize("NFKC", name)
-    # 前後の空白を除去し、英字は大文字化
     return normalized.strip().upper()
 
-# タグのクリーンアップ
-def cleanup_unused_tags(cur):
-
-    # 削除済みノートに紐づいた note_tags を削除
-    cur.execute("""
-        DELETE FROM note_tags
-        WHERE note_id NOT IN (SELECT id FROM notes)
-    """)
-    deleted_note_tags = cur.rowcount
-    if deleted_note_tags > 0:
-        logging.getLogger("tags").info(f"🧹 Deleted {deleted_note_tags} orphaned note_tags")
-
-    # どの note_tags にも使われていないタグを削除
-    cur.execute("""
-        DELETE FROM tags
-        WHERE id NOT IN (SELECT DISTINCT tag_id FROM note_tags)
-    """)
-    deleted_tags = cur.rowcount
-    if deleted_tags > 0:
-        logging.getLogger("tags").info(f"🧽 Deleted {deleted_tags} unused tags")
-
-
+# -----------------------------------------------------------------------
+# 未使用
 # -----------------------------------------------------------------------
 
 @app.get("/search")
@@ -903,5 +805,53 @@ def _sanitize_name(name: str, maxlen: int = 100) -> str:
     if len(name) > maxlen:
         name = name[:maxlen]
     return name
+
+
+# -----------------------------------------------------------------------
+
+def purge_expired_trashed_notes(cur, config):
+    logger = logging.getLogger("maintenance")
+    trash_conf = (config or {}).get("trash", {})
+    if trash_conf.get("enabled") and trash_conf.get("auto_empty_days", 0) > 0:
+        days = int(trash_conf["auto_empty_days"])
+        cur.execute("""
+            DELETE FROM notes
+            WHERE id IN (
+                SELECT n.id FROM notes n
+                JOIN note_tags nt ON n.id = nt.note_id
+                JOIN tags t ON nt.tag_id = t.id
+                WHERE t.name = 'Trash'
+                  AND n.updated_at < datetime('now', ?)
+            )
+        """, (f'-{days} days',))
+        cnt = cur.rowcount or 0
+        if cnt > 0:
+            logger.info(f"🗑️ Deleted {cnt} trashed notes older than {days} days")
+
+def remove_orphan_note_tags(cur):
+    logger = logging.getLogger("maintenance")
+    cur.execute("""
+        DELETE FROM note_tags
+        WHERE note_id NOT IN (SELECT id FROM notes)
+    """)
+    cnt = cur.rowcount or 0
+    if cnt > 0:
+        logger.info(f"🧹 Deleted {cnt} orphaned note_tags")
+
+def remove_unused_tags(cur):
+    logger = logging.getLogger("maintenance")
+    cur.execute("""
+        DELETE FROM tags
+        WHERE id NOT IN (SELECT DISTINCT tag_id FROM note_tags)
+    """)
+    cnt = cur.rowcount or 0
+    if cnt > 0:
+        logger.info(f"🧽 Deleted {cnt} unused tags")
+
+def run_maintenance(cur, config=None):
+    # 順番はこの通りで
+    purge_expired_trashed_notes(cur, config)
+    remove_orphan_note_tags(cur)
+    remove_unused_tags(cur)
 
 

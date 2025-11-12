@@ -60,7 +60,8 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-## @router.post("/auth/token")
+# ---------------------
+
 @router.post("/token")
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
@@ -71,8 +72,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-#    token = create_access_token({"sub": user["username"]})
-#    return {"access_token": token, "token_type": "bearer"}
 
     access_token = create_access_token(
         {"sub": user["username"]},
@@ -88,7 +87,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         "token_type": "bearer"
     }
 
-## @router.post("/auth/refresh")
 @router.post("/refresh")
 def refresh_token(payload: dict):
 
@@ -151,7 +149,4 @@ def init_users(users):
 
     conn.commit()
     conn.close()
-
-
-
 
