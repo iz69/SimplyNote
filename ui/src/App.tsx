@@ -526,15 +526,6 @@ export default function App() {
       <div className="w-1/4 border-r border-gray-300 flex flex-col">
 
         {/* ヘッダー */}
-        {/*
-        <div className="p-3 border-b flex justify-between items-center">
-          <h1 className="font-semibold text-lg">All Notes</h1>
-          <button onClick={handleNew} className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600">
-            ＋ 新規
-          </button>
-        </div>
-        */}
-
         <div className="p-3 border-b flex justify-between items-center relative menu-area">
 
           {/* 左：メニュー＋タイトル */}
@@ -842,13 +833,23 @@ export default function App() {
               {tags.map((tag) => (
                 <span
                   key={tag}
-                  className="px-2 py-1 bg-gray-200 rounded cursor-pointer hover:bg-gray-300 text-sm"
-                  onClick={() => handleRemoveTag(selected.id, tag)}
-                >
+                  className="relative inline-flex items-center px-2 py-1 bg-gray-200 rounded text-sm mr-2" >
                   #{tag}
+
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTag(selected.id, tag)}
+                    className="absolute -top-[6px] -right-[8px] w-4 h-4 flex items-center justify-center 
+                               bg-white border border-gray-300 rounded-full hover:bg-gray-100" >
+                    <span className="relative w-2 h-2">
+                      <span className="absolute left-0 top-1/2 w-full h-[1px] bg-gray-600 rotate-45 origin-center"></span>
+                      <span className="absolute left-0 top-1/2 w-full h-[1px] bg-gray-600 -rotate-45 origin-center"></span>
+                    </span>
+                  </button>
+
                 </span>
               ))}
-      
+
             </div>
           )}
         </div>
