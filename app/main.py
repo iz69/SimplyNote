@@ -51,7 +51,12 @@ app.add_middleware(
 # 設定・ログ
 # ------------------------------------------------------------
 config = load_config()
-logging.basicConfig(level=config["logging"]["level"])
+#logging.basicConfig(level=config["logging"]["level"])
+logging.basicConfig(
+    level=config["logging"]["level"],
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
 logger = logging.getLogger("simplynote")
 
 # ------------------------------------------------------------
