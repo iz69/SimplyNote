@@ -9,8 +9,6 @@ export interface Note {
   id: number;
   title: string;
   content: string;
-//  tags?: string[];
-//  files?: FileOut[]; 
   updated_at?: string;
   created_at?: string;
 }
@@ -165,7 +163,6 @@ export async function removeTag(
   return data.tags;
 }
 
-
 export interface Tag {
   name: string;
   note_count?: number;
@@ -193,6 +190,27 @@ export async function getNotesByTag(
   if (!res.ok) throw new Error("get_notes_error");
   return res.json();
 }
+
+// -------------------------
+
+export async function toggleStar(
+  token: string,
+  noteId: number
+): Promise<number> {
+  const res = await fetch(`${API_URL}/notes/${noteId}/important`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (res.status === 401) throw new Error("unauthorized");
+  if (!res.ok) throw new Error("toggle_star_error");
+
+  const data = await res.json();
+  return data.is_important;   // バックエンドが {"is_important": 1} みたいに返す想定
+}
+
 
 // -------------------------
 

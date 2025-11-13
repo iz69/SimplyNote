@@ -37,8 +37,8 @@ swagger_enabled = os.getenv("SWAGGER_API_DOCS", "true").lower() not in ["false",
 
 app = FastAPI(
     title="SimplyNote API",
-    docs_url=None if not swagger_enabled else f"{base_path}/docs",
-    redoc_url=None if not swagger_enabled else f"{base_path}/redoc",
+    docs_url=None if not swagger_enabled else "/docs",
+    redoc_url=None if not swagger_enabled else "/redoc",
     swagger_ui_parameters={
         "url": f"{base_path}/openapi.json",
     },
@@ -64,7 +64,7 @@ config = load_config()
 #logging.basicConfig(level=config["logging"]["level"])
 logging.basicConfig(
     level=config["logging"]["level"],
-    format="                          - %(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    format=":: %(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger("simplynote")
@@ -126,6 +126,9 @@ def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(
     conn = get_connection()
     cur = conn.cursor()
 
+    current_user = get_current_user(token)
+    user_id = current_user["id"]
+
     if tag:
         # 特定タグが指定された場合：そのタグを持つノートだけ
         cur.execute("""
@@ -136,10 +139,10 @@ def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(
             JOIN tags t1 ON nt1.tag_id = t1.id
             LEFT JOIN note_tags nt2 ON n.id = nt2.note_id
             LEFT JOIN tags t2 ON nt2.tag_id = t2.id
-            WHERE t1.name = ?
+            WHERE t1.name = ? AND n.user_id = ?
             GROUP BY n.id
-            ORDER BY n.updated_at DESC
-        """, (tag,))
+            ORDER BY is_important DESC, updated_at DESC
+        """, (tag, user_id))
     else:
         # 全ノート
         cur.execute("""
@@ -148,9 +151,10 @@ def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(
             FROM notes n
             LEFT JOIN note_tags nt ON n.id = nt.note_id
             LEFT JOIN tags t ON nt.tag_id = t.id
+            WHERE n.user_id = ?
             GROUP BY n.id
-            ORDER BY n.updated_at DESC
-        """)
+            ORDER BY is_important DESC, updated_at DESC
+        """, (user_id,))
 
     notes = []
     for row in cur.fetchall():
@@ -184,19 +188,26 @@ def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(
 def get_note(note_id: int, request: Request, token: str = Depends(oauth2_scheme)):
     conn = get_connection()
     cur = conn.cursor()
+
+    current_user = get_current_user(token)
+    user_id = current_user["id"]
+
     cur.execute("""
         SELECT n.*, GROUP_CONCAT(t.name, ',') AS tags
         FROM notes n
         LEFT JOIN note_tags nt ON n.id = nt.note_id
         LEFT JOIN tags t ON nt.tag_id = t.id
-        WHERE n.id = ?
+        WHERE n.id = ? AND n.user_id = ?
         GROUP BY n.id
-    """, (note_id,))
+    """, (note_id, user_id))
     row = cur.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Note not found")
 
     d = dict(row)
+
+    d["is_important"] = bool(d["is_important"])
+
     d["tags"] = d["tags"].split(",") if d["tags"] else []
 
     # 添付ファイルを取得して追加
@@ -222,12 +233,13 @@ def get_note(note_id: int, request: Request, token: str = Depends(oauth2_scheme)
 @app.post("/notes", response_model=NoteOut)
 def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
 
-    now = datetime.utcnow().isoformat()
     conn = get_connection()
     cur = conn.cursor()
 
     current_user = get_current_user(token)
     user_id = current_user["id"]
+
+    now = datetime.utcnow().isoformat()
 
     # ノート本体
     cur.execute(
@@ -244,6 +256,7 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
         "id": note_id,
         "title": note.title,
         "content": note.content,
+        "is_important": False,
         "tags": [],
         "files": [],
         "created_at": now,
@@ -258,19 +271,28 @@ def update_note(
     token: str = Depends(oauth2_scheme),
 ):
 
-    now = datetime.utcnow().isoformat()
     conn = get_connection()
     cur = conn.cursor()
 
     current_user = get_current_user(token)
     user_id = current_user["id"]
 
-    cur.execute("SELECT id FROM notes WHERE id=?", (note_id,))
-    if not cur.fetchone():
-        conn.close()
-        logger.warning(f"[update_note] note {note_id} not found for user {user_id}")
-        raise HTTPException(status_code=404, detail="Note not found")
+    now = datetime.utcnow().isoformat()
 
+    # ノートの存在チェックとis_importantの取得
+#    cur.execute("SELECT id FROM notes WHERE id=?", (note_id,))
+#    if not cur.fetchone():
+#        conn.close()
+#        logger.warning(f"[update_note] note {note_id} not found for user {user_id}")
+#        raise HTTPException(status_code=404, detail="Note not found")
+    cur.execute("SELECT is_important FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, "Note not found")
+    is_important = bool(row[0])
+
+    # 更新
     cur.execute(
         "UPDATE notes SET title=?, content=?, updated_at=? WHERE id=? AND user_id=?",
         (note.title, note.content, now, note_id, user_id),
@@ -295,6 +317,7 @@ def update_note(
         "id": note_id,
         "title": note.title,
         "content": note.content,
+        "is_important": is_important,
         "tags": tags,
         "files": files,
         "updated_at": now,
@@ -306,6 +329,16 @@ def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
     conn = get_connection()
     cur = conn.cursor()
 
+    current_user = get_current_user(token)
+    user_id = current_user["id"]
+
+    # まず「自分のノートか」を確認
+    cur.execute("SELECT id FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Note not found")
+
     # 添付ファイルパスを取得
     cur.execute("SELECT filename_stored FROM attachments WHERE note_id=?", (note_id,))
     files = [row[0] for row in cur.fetchall()]
@@ -314,11 +347,11 @@ def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
     cur.execute("DELETE FROM attachments WHERE note_id=?", (note_id,))
 
     # ノート本体を削除
-    cur.execute("DELETE FROM notes WHERE id=?", (note_id,))
+    cur.execute("DELETE FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
     deleted = cur.rowcount
 
     # 不要タグ・ゴミ箱メンテナンス
-    run_maintenance()
+    run_maintenance(user_id=user_id)
 
     conn.commit()
     conn.close()
@@ -347,7 +380,11 @@ def upload_attachment( note_id: int, request: Request, file: UploadFile = File(.
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT id FROM notes WHERE id=?", (note_id,))
+    current_user = get_current_user(token)
+    user_id = current_user["id"]
+
+    # まず「自分のノートか」を確認
+    cur.execute("SELECT id FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
     if not cur.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="Note not found")
@@ -399,8 +436,24 @@ def delete_attachment( attachment_id: int, token: str = Depends(oauth2_scheme),)
     conn = get_connection()
     cur = conn.cursor()
 
+    current_user = get_current_user(token)
+    user_id = current_user["id"]
+
     # 添付ファイル情報の取得
-    cur.execute("SELECT filename_stored FROM attachments WHERE id=?", (attachment_id,))
+#    cur.execute("SELECT filename_stored FROM attachments WHERE id=?", (attachment_id,))
+#    row = cur.fetchone()
+#    if not row:
+#        conn.close()
+#        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    # 添付ファイル + 所有者チェック
+    cur.execute("""
+        SELECT a.filename_stored
+        FROM attachments a
+        JOIN notes n ON a.note_id = n.id
+        WHERE a.id = ? AND n.user_id = ?
+    """, (attachment_id, user_id))
+
     row = cur.fetchone()
     if not row:
         conn.close()
@@ -433,8 +486,11 @@ def add_tag(note_id: int, tag: dict, token: str = Depends(oauth2_scheme)):
     conn = get_connection()
     cur = conn.cursor()
 
+    current_user = get_current_user(token)
+    user_id = current_user["id"]
+
     # ノートの存在チェック
-    cur.execute("SELECT id FROM notes WHERE id=?", (note_id,))
+    cur.execute("SELECT id FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
     if not cur.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="Note not found")
@@ -456,7 +512,7 @@ def add_tag(note_id: int, tag: dict, token: str = Depends(oauth2_scheme)):
     conn.commit()
 
     # 不要タグ・ゴミ箱メンテナンス
-    run_maintenance()
+    run_maintenance(user_id=user_id)
 
     # 現在のタグ一覧を返す
     cur.execute("""
@@ -477,6 +533,15 @@ def remove_tag(note_id: int, tag_name: str, token: str = Depends(oauth2_scheme))
     conn = get_connection()
     cur = conn.cursor()
 
+    current_user = get_current_user(token)
+    user_id = current_user["id"]
+
+    cur.execute("SELECT id FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
+    if not cur.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    # タグID
     cur.execute("SELECT id FROM tags WHERE name=?", (tag_name,))
     tag_row = cur.fetchone()
     if not tag_row:
@@ -489,7 +554,7 @@ def remove_tag(note_id: int, tag_name: str, token: str = Depends(oauth2_scheme))
     conn.commit()
 
     # 不要タグ・ゴミ箱メンテナンス
-    run_maintenance()
+    run_maintenance(user_id=user_id)
 
     # 現在のタグ一覧を返す
     cur.execute("""
@@ -508,13 +573,19 @@ def get_all_tags(token: str = Depends(oauth2_scheme)):
     conn = get_connection()
     cur = conn.cursor()
 
+    current_user = get_current_user(token)
+    user_id = current_user["id"]
+
     cur.execute("""
         SELECT t.name, COUNT(nt.note_id) AS note_count
         FROM tags t
-        LEFT JOIN note_tags nt ON t.id = nt.tag_id
+        JOIN note_tags nt ON t.id = nt.tag_id
+        JOIN notes n ON nt.note_id = n.id
+        WHERE n.user_id = ?
         GROUP BY t.id
         ORDER BY t.name COLLATE NOCASE
-    """)
+    """, (user_id,))
+
     tags = [{"name": row[0], "note_count": row[1]} for row in cur.fetchall()]
 
     conn.close()
@@ -532,6 +603,47 @@ def normalize_tag_name(name: str) -> str:
     return normalized.strip().upper()
 
 # -----------------------------------------------------------------------
+
+@app.put("/notes/{note_id}/important")
+def toggle_important(note_id: int, token: str = Depends(oauth2_scheme)):
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # 認証ユーザ
+    current_user = get_current_user(token)
+    user_id = current_user["id"]
+
+    # ノート所有チェック & 現在の is_important を取得
+    cur.execute( """
+        SELECT is_important
+        FROM notes
+        WHERE id = ? AND user_id = ?
+    """, (note_id, user_id),)
+    row = cur.fetchone()
+
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    current_flag = row["is_important"] or 0
+    new_flag = 0 if current_flag else 1
+
+    # 更新
+    cur.execute( """
+        UPDATE notes
+        SET is_important = ?,
+            updated_at   = ?
+        WHERE id = ?
+          AND user_id = ?
+    """, (new_flag, datetime.utcnow().isoformat(), note_id, user_id),)
+
+    conn.commit()
+    conn.close()
+
+    return {"note_id": note_id, "is_important": bool(new_flag)}
+
+# -----------------------------------------------------------------------
 # 未使用
 # -----------------------------------------------------------------------
 
@@ -539,16 +651,20 @@ def normalize_tag_name(name: str) -> str:
 def search_notes(q: str, token: str = Depends(oauth2_scheme)):
     conn = get_connection()
     cur = conn.cursor()
+
+    current_user = get_current_user(token)
+    user_id = current_user["id"]
+
     cur.execute("""
         SELECT n.*, GROUP_CONCAT(t.name, ',') AS tags
         FROM notes n
         JOIN notes_fts f ON n.id = f.rowid
         LEFT JOIN note_tags nt ON n.id = nt.note_id
         LEFT JOIN tags t ON nt.tag_id = t.id
-        WHERE notes_fts MATCH ?
+        WHERE user_id = ? AND notes_fts MATCH ?
         GROUP BY n.id
-        ORDER BY rank
-    """, (q,))
+        ORDER BY bm25(notes_fts)
+    """, (user_id, q))
     rows = cur.fetchall()
     conn.close()
 
@@ -613,14 +729,33 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
             # --- ZIP内の更新日時を datetime に変換 ---
             updated_at = datetime(*info.date_time)
 
-            # --- タグ行を本文から分離 ---
+#            # --- タグ行を本文から分離 ---
+#            tags = []
+#            content_text = text
+#            if "\n---\nTags:" in text:
+#                body_parts = text.split("\n---\nTags:", 1)
+#                content_text = body_parts[0].rstrip("\n\r")
+#                tag_line = body_parts[1].strip()
+#                tags = [t.strip() for t in tag_line.split(",") if t.strip()]
+
+            # --- タグ・重要フラグなどのメタデータを本文から分離 ---
             tags = []
+            is_important = False
             content_text = text
-            if "\n---\nTags:" in text:
-                body_parts = text.split("\n---\nTags:", 1)
-                content_text = body_parts[0].rstrip("\n\r")
-                tag_line = body_parts[1].strip()
-                tags = [t.strip() for t in tag_line.split(",") if t.strip()]
+
+            if "\n---\n" in text:
+                body, meta_raw = text.split("\n---\n", 1)
+                content_text = body.rstrip("\n\r")
+
+                for line in meta_raw.splitlines():
+                    line = line.strip()
+                    if line.startswith("Tags:"):
+                        tag_line = line.replace("Tags:", "", 1).strip()
+                        tags = [t.strip() for t in tag_line.split(",") if t.strip()]
+                    if line.startswith("Important:"):
+                        val = line.replace("Important:", "", 1).strip().lower()
+                        is_important = (val == "true")
+
 
             # --- タイトル重複チェック ---
             cur.execute("SELECT id FROM notes WHERE user_id=? AND title=?", (user_id, title))
@@ -632,10 +767,10 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
             # --- ノート登録 ---
             cur.execute(
                 """
-                INSERT INTO notes (user_id, title, content, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO notes (user_id, title, content, is_important, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (user_id, title, content_text, updated_at.isoformat(), updated_at.isoformat()),
+                (user_id, title, content_text, is_important, updated_at.isoformat(), updated_at.isoformat()),
             )
             note_id = cur.lastrowid
 
@@ -701,7 +836,7 @@ def export_notes(token: str = Depends(oauth2_scheme)):
     user_id = current_user["id"]
 
     # ノート一覧取得
-    cur.execute("SELECT id, title, content, updated_at FROM notes WHERE user_id=?", (user_id,))
+    cur.execute("SELECT id, title, content, is_important, updated_at FROM notes WHERE user_id=?", (user_id,))
     notes = cur.fetchall()
 
     upload_dir = os.path.abspath(config["upload"]["dir"])
@@ -729,9 +864,26 @@ def export_notes(token: str = Depends(oauth2_scheme)):
             tags = [row["name"] for row in cur.fetchall()]
 
             # 本文 + タグ追記
+#            text = note["content"] or ""
+#            if tags:
+#                text += "\n\n---\nTags: " + ", ".join(tags)
+
             text = note["content"] or ""
+            lines = [text]
+
+            meta = []
+
             if tags:
-                text += "\n\n---\nTags: " + ", ".join(tags)
+                meta.append("Tags: " + ", ".join(tags))
+
+            if note["is_important"]:
+                meta.append("Important: true")
+
+            if meta:
+                lines.append("\n---")
+                lines.append("\n".join(meta))
+
+            text = "\n".join(lines)
 
             # 本文ファイルは note_id を含めて一意化
             txt_name = f"{note_id}`{safe_title}.txt"
@@ -824,24 +976,42 @@ def _sanitize_name(name: str, maxlen: int = 100) -> str:
 
 # -----------------------------------------------------------------------
 
-def purge_expired_trashed_notes(cur):
+def purge_expired_trashed_notes(cur, user_id=None):
+
     logger = logging.getLogger("maintenance")
     trash_conf = (config or {}).get("trash", {})
+
     if trash_conf.get("enabled") and trash_conf.get("auto_empty_days", 0) > 0:
         days = int(trash_conf["auto_empty_days"])
-        cur.execute("""
-            DELETE FROM notes
-            WHERE id IN (
-                SELECT n.id FROM notes n
-                JOIN note_tags nt ON n.id = nt.note_id
-                JOIN tags t ON nt.tag_id = t.id
-                WHERE t.name = 'Trash'
-                  AND n.updated_at < datetime('now', ?)
-            )
-        """, (f'-{days} days',))
-        cnt = cur.rowcount or 0
-        if cnt > 0:
-            logger.info(f"🗑️ Deleted {cnt} trashed notes older than {days} days")
+
+        if user_id:
+            cur.execute("""
+                DELETE FROM notes
+                WHERE id IN (
+                    SELECT n.id FROM notes n
+                    JOIN note_tags nt ON n.id = nt.note_id
+                    JOIN tags t ON nt.tag_id = t.id
+                    WHERE t.name = 'Trash'
+                      AND n.user_id = ?
+                      AND n.updated_at < datetime('now', ?)
+                )
+            """, (user_id, f'-{days} days'))
+
+        else:
+            cur.execute("""
+                DELETE FROM notes
+                WHERE id IN (
+                    SELECT n.id FROM notes n
+                    JOIN note_tags nt ON n.id = nt.note_id
+                    JOIN tags t ON nt.tag_id = t.id
+                    WHERE t.name = 'Trash'
+                      AND n.updated_at < datetime('now', ?)
+                )
+            """, (f'-{days} days',))
+
+    cnt = cur.rowcount or 0
+    if cnt > 0:
+        logger.info(f"🗑️ Deleted {cnt} trashed notes older than {days} days")
 
 def remove_orphan_note_tags(cur):
     logger = logging.getLogger("maintenance")
@@ -863,13 +1033,13 @@ def remove_unused_tags(cur):
     if cnt > 0:
         logger.info(f"🧽 Deleted {cnt} unused tags")
 
-def run_maintenance():
+def run_maintenance( user_id=None ):
 
     conn = get_connection()
     cur = conn.cursor()
 
     # 順番はこの通りで
-    purge_expired_trashed_notes(cur)
+    purge_expired_trashed_notes(cur, user_id=user_id)
     remove_orphan_note_tags(cur)
     remove_unused_tags(cur)
 

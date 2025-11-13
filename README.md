@@ -1,6 +1,18 @@
-気が向いたときに作り途中
+自鯖にsimplenoteぽいのを入れたくて自分用に作ったもの
+気が向いたときに更新
+
+Host
+- debian + nginx (proxy_pass)
+- docker
+ - simplynote-api
+ - simplynote-ui (web ui)
+
+Other client
+- simplynote-vim (vim plugin)
+- simplynote-app (flutter android)
 
 ---
+
 
 Simplenote Alternative Memo System (currently under development)
 
@@ -21,3 +33,14 @@ Includes a Vim plugin and an Android app (in another repositories).
 
 ### Flutter Apps (Android)
 <img src="https://github.com/user-attachments/assets/1dae6e88-be43-4697-9513-c0b023164bcc" width="300" alt="SimplyNote_Android" />
+
+---
+
+### License
+This project is licensed under the MIT License.
+See the LICENSE(https://opensource.org/license/mit/) for details.
+
+### Support & Donation
+GitHub Sponsors: github.com/sponsors/iz69
+
+

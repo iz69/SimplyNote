@@ -4,7 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { refreshAccessToken } from "./api";
 import { getNotes, createNote, updateNote, deleteNote, saveNote } from "./api";
-import { saveAttachments, removeAttachment, getAllTags, addTag, removeTag } from "./api";
+import { saveAttachments, removeAttachment, getAllTags, addTag, removeTag, toggleStar } from "./api";
 import { importNotes, exportNotes } from "./api";
 
 export default function App() {
@@ -440,6 +440,34 @@ export default function App() {
     }
   };
 
+  // Star（is_important）のトグル
+  const handleToggleStar = async (noteId: number) => {
+    try {
+      const newValue = await toggleStar(token!, noteId);
+  
+      // notes 一覧の該当ノートだけ更新
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === noteId ? { ...n, is_important: newValue } : n
+        )
+      );
+  
+      // noteDetail（詳細表示中）も更新しているならここにも反映
+      if (selected && selected.id === noteId) {
+        setSelected({ ...selected, is_important: newValue });
+      }
+  
+    } catch (err: any) {
+      if (err.message === "unauthorized") {
+        localStorage.removeItem("token");
+        window.location.href = `${BASE_PATH}/login`;
+      } else {
+        console.error(err);
+        alert("スター更新に失敗しました。");
+      }
+    }
+  };
+
   // インポート
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
 
@@ -687,12 +715,6 @@ export default function App() {
               }`}
             >
 
-              {/*
-              <div className="font-medium truncate overflow-hidden whitespace-nowrap">
-                {note.title}
-              </div>
-              */}
-
               <div className="font-medium flex items-center justify-between">
                 <span className="truncate max-w-[85%]">{note.title}</span>
                 {unsavedNoteIds.includes(note.id) && (
@@ -704,6 +726,7 @@ export default function App() {
                 )}
               </div>
 
+              {/*
               <div className="text-sm text-gray-500 flex items-center flex-wrap gap-1">
                 <span className="mr-2">{note.updated_at?.slice(0, 10)}</span>
                 {note.tags?.map((tag) => (
@@ -715,7 +738,57 @@ export default function App() {
                   </span>
                 ))}
               </div>
+              */}
 
+              <div className="flex items-center justify-between">
+  
+                {/* 左：日付＋タグ */}
+                <div className="flex items-center flex-wrap gap-1">
+                  <span className="mr-2">{note.updated_at?.slice(0, 10)}</span>
+  
+                  {note.tags?.map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+  
+                {/* 右：スター（SVGアイコン） */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleStar(note.id);
+                  }}
+                  className="ml-2 shrink-0 hover:opacity-80" >
+
+                  {note.is_important ? (
+                    // 塗りつぶし（重要）
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      className="w-5 h-5 text-yellow-500" >
+                      <path d="M12 17.27l6.18 3.73-1.64-7.03L21 9.24l-7.19-.61L12 2l-1.81 6.63L3 9.24l4.46 4.73L5.82 21z" />
+                    </svg>
+                  ) : (
+                    // 枠だけ（未重要）
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className="w-5 h-5 text-gray-400" >
+                      <path d="M12 17.27l6.18 3.73-1.64-7.03L21 9.24l-7.19-.61L12 2l-1.81 6.63L3 9.24l4.46 4.73L5.82 21z" />
+                    </svg>
+                  )}
+                </button>
+  
+              </div>
+  
             </div>
           ))}
   
@@ -790,17 +863,57 @@ export default function App() {
             )}
 
             {selected && (
-              showTrashOnly ? (
-                <button onClick={handleDelete} className="text-red-600 hover:text-red-800"> 
-                  🗑️ 完全削除
-                </button>
-              ) : (
-                <button onClick={handleRemove} className="text-red-600 hover:text-red-800">
-                  🗑️ 削除
-                </button>
-              )
+              <div className="flex items-center gap-3">
+
+                {/* ★ スターアイコン（ここが追加部分） */}
+                {selected && (
+
+                  <button
+                    onClick={() => handleToggleStar(selected.id)}
+                    className="hover:opacity-80" >
+
+                    {selected.is_important ? (
+                      // 塗りつぶし（重要）
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        className="w-6 h-6 text-yellow-500"
+                      >
+                        <path d="M12 17.27l6.18 3.73-1.64-7.03L21 9.24l-7.19-.61L12 2 10.19 8.63 3 9.24l4.46 4.73L5.82 21z" />
+                      </svg>
+                    ) : (
+                      // 枠だけ（未重要）
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        className="w-6 h-6 text-gray-400"
+                      >
+                        <path d="M12 17.27l6.18 3.73-1.64-7.03L21 9.24l-7.19-.61L12 2 10.19 8.63 3 9.24l4.46 4.73L5.82 21z" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+
+                {selected && (
+                  showTrashOnly ? (
+                    <button onClick={handleDelete} className="text-red-600 hover:text-red-800"> 
+                      🗑️ 完全削除
+                    </button>
+                  ) : (
+                    <button onClick={handleRemove} className="text-red-600 hover:text-red-800">
+                      🗑️ 削除
+                    </button>
+                  )
+                )}
+
+              </div>
             )}
           </div>
+
   
           {/* ヘッダー タグ */}
           {selected && (
