@@ -19,21 +19,31 @@ import io, zipfile, re
 # FastAPI
 # ------------------------------------------------------------
 
-# 環境変数から BASE_PATH を取得
-base_path = os.getenv("BASE_PATH", "/").rstrip("/") + "/"
+# base_path = os.getenv("BASE_PATH", "/").rstrip("/") + "/"
+#app = FastAPI(
+#    title="SimplyNote API",
+#    docs_url=None if not swagger_enabled else "/docs",
+#    redoc_url=None if not swagger_enabled else "/redoc",
+#    swagger_ui_parameters={
+#        "url": f"{base_path}/openapi.json",
+#    },
+#    servers=[
+#        {"url": base_path.rstrip("/")},
+#    ],
+#)
 
-# 環境変数で Swagger の有効・無効を制御
+base_path = os.getenv("BASE_PATH", "/").rstrip("/")
 swagger_enabled = os.getenv("SWAGGER_API_DOCS", "true").lower() not in ["false", "0", "no"]
 
 app = FastAPI(
     title="SimplyNote API",
-    docs_url=None if not swagger_enabled else "/docs",
-    redoc_url=None if not swagger_enabled else "/redoc",
+    docs_url=None if not swagger_enabled else f"{base_path}/docs",
+    redoc_url=None if not swagger_enabled else f"{base_path}/redoc",
     swagger_ui_parameters={
         "url": f"{base_path}/openapi.json",
     },
     servers=[
-        {"url": base_path.rstrip("/")},
+        {"url": base_path},
     ],
 )
 
@@ -54,7 +64,7 @@ config = load_config()
 #logging.basicConfig(level=config["logging"]["level"])
 logging.basicConfig(
     level=config["logging"]["level"],
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    format="                          - %(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger("simplynote")
@@ -308,7 +318,7 @@ def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
     deleted = cur.rowcount
 
     # 不要タグ・ゴミ箱メンテナンス
-    run_maintenance(cur)
+    run_maintenance()
 
     conn.commit()
     conn.close()
@@ -446,7 +456,7 @@ def add_tag(note_id: int, tag: dict, token: str = Depends(oauth2_scheme)):
     conn.commit()
 
     # 不要タグ・ゴミ箱メンテナンス
-    run_maintenance(cur)
+    run_maintenance()
 
     # 現在のタグ一覧を返す
     cur.execute("""
@@ -479,7 +489,7 @@ def remove_tag(note_id: int, tag_name: str, token: str = Depends(oauth2_scheme))
     conn.commit()
 
     # 不要タグ・ゴミ箱メンテナンス
-    run_maintenance(cur)
+    run_maintenance()
 
     # 現在のタグ一覧を返す
     cur.execute("""
@@ -814,7 +824,7 @@ def _sanitize_name(name: str, maxlen: int = 100) -> str:
 
 # -----------------------------------------------------------------------
 
-def purge_expired_trashed_notes(cur, config):
+def purge_expired_trashed_notes(cur):
     logger = logging.getLogger("maintenance")
     trash_conf = (config or {}).get("trash", {})
     if trash_conf.get("enabled") and trash_conf.get("auto_empty_days", 0) > 0:
@@ -853,10 +863,16 @@ def remove_unused_tags(cur):
     if cnt > 0:
         logger.info(f"🧽 Deleted {cnt} unused tags")
 
-def run_maintenance(cur, config=None):
+def run_maintenance():
+
+    conn = get_connection()
+    cur = conn.cursor()
+
     # 順番はこの通りで
-    purge_expired_trashed_notes(cur, config)
+    purge_expired_trashed_notes(cur)
     remove_orphan_note_tags(cur)
     remove_unused_tags(cur)
 
+    conn.commit()
+    conn.close()
 
