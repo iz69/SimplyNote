@@ -206,7 +206,7 @@ def get_note(note_id: int, request: Request, token: str = Depends(oauth2_scheme)
 
     d = dict(row)
 
-    d["is_important"] = bool(d["is_important"])
+    d["is_important"] = int(d["is_important"])
 
     d["tags"] = d["tags"].split(",") if d["tags"] else []
 
@@ -256,7 +256,7 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
         "id": note_id,
         "title": note.title,
         "content": note.content,
-        "is_important": False,
+        "is_important": 0,
         "tags": [],
         "files": [],
         "created_at": now,
@@ -290,7 +290,7 @@ def update_note(
     if not row:
         conn.close()
         raise HTTPException(404, "Note not found")
-    is_important = bool(row[0])
+    is_important = int(row[0])
 
     # 更新
     cur.execute(
@@ -641,7 +641,7 @@ def toggle_important(note_id: int, token: str = Depends(oauth2_scheme)):
     conn.commit()
     conn.close()
 
-    return {"note_id": note_id, "is_important": bool(new_flag)}
+    return {"note_id": note_id, "is_important": new_flag}
 
 # -----------------------------------------------------------------------
 # 未使用
@@ -740,7 +740,7 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
 
             # --- タグ・重要フラグなどのメタデータを本文から分離 ---
             tags = []
-            is_important = False
+            is_important = 0
             content_text = text
 
             if "\n---\n" in text:
@@ -754,7 +754,7 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
                         tags = [t.strip() for t in tag_line.split(",") if t.strip()]
                     if line.startswith("Important:"):
                         val = line.replace("Important:", "", 1).strip().lower()
-                        is_important = (val == "true")
+                        is_important = val
 
 
             # --- タイトル重複チェック ---
