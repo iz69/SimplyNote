@@ -241,10 +241,13 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
 
     now = datetime.utcnow().isoformat()
 
+    # 改行コードの正規化
+    content = normalize_newlines(note.content)
+
     # ノート本体
     cur.execute(
         "INSERT INTO notes (user_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        (user_id, note.title, note.content, now, now),
+        (user_id, note.title, content, now, now),
     )
     note_id = cur.lastrowid
 
@@ -255,7 +258,7 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
     return {
         "id": note_id,
         "title": note.title,
-        "content": note.content,
+        "content": content,
         "is_important": 0,
         "tags": [],
         "files": [],
@@ -292,10 +295,13 @@ def update_note(
         raise HTTPException(404, "Note not found")
     is_important = int(row[0])
 
+    # 改行コードの正規化
+    content = normalize_newlines(note.content)
+
     # 更新
     cur.execute(
         "UPDATE notes SET title=?, content=?, updated_at=? WHERE id=? AND user_id=?",
-        (note.title, note.content, now, note_id, user_id),
+        (note.title, content, now, note_id, user_id),
     )
 
     # 添付ファイル情報を取得
@@ -316,12 +322,16 @@ def update_note(
     return {
         "id": note_id,
         "title": note.title,
-        "content": note.content,
+        "content": content,
         "is_important": is_important,
         "tags": tags,
         "files": files,
         "updated_at": now,
     }
+
+# 改行コードの正規化
+def normalize_newlines(text: str) -> str:
+    return text.replace("\r\n", "\n").replace("\r", "\n")
 
 @app.delete("/notes/{note_id}")
 def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
@@ -430,7 +440,7 @@ def upload_attachment( note_id: int, request: Request, file: UploadFile = File(.
         "url": f"/files/{safe_name}",
     }
 
-@app.delete("/attachments/{attachment_id}")
+app.delete("/attachments/{attachment_id}")
 def delete_attachment( attachment_id: int, token: str = Depends(oauth2_scheme),):
 
     conn = get_connection()
@@ -764,13 +774,16 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
                 suffix = f" (imported {updated_at.strftime('%Y%m%d%H%M%S')})"
                 title += suffix
 
+            # 改行コードの正規化
+            content = normalize_newlines(content_text)
+
             # --- ノート登録 ---
             cur.execute(
                 """
                 INSERT INTO notes (user_id, title, content, is_important, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (user_id, title, content_text, is_important, updated_at.isoformat(), updated_at.isoformat()),
+                (user_id, title, content, is_important, updated_at.isoformat(), updated_at.isoformat()),
             )
             note_id = cur.lastrowid
 
