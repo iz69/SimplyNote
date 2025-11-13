@@ -8,6 +8,7 @@ services:
     volumes:
       - ./data:/data
     environment:
+      - TZ=Asia/Tokyo
       - ADMIN_USER=admin
       - ADMIN_PASS=password
       - BASE_PATH=/simplynote-api

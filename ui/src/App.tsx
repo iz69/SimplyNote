@@ -728,7 +728,9 @@ export default function App() {
 
               {/*
               <div className="text-sm text-gray-500 flex items-center flex-wrap gap-1">
-                <span className="mr-2">{note.updated_at?.slice(0, 10)}</span>
+                <span className="mr-2">
+                  {note.updated_at && new Date(note.updated_at).toLocaleDateString()}
+                </span>
                 {note.tags?.map((tag) => (
                   <span
                     key={tag}
@@ -744,8 +746,9 @@ export default function App() {
   
                 {/* 左：日付＋タグ */}
                 <div className="flex items-center flex-wrap gap-1">
-                  <span className="mr-2">{note.updated_at?.slice(0, 10)}</span>
-  
+                  <span className="mr-2">
+                    {note.updated_at && new Date(note.updated_at).toLocaleDateString()}
+                  </span>
                   {note.tags?.map((tag) => (
                     <span
                       key={tag}

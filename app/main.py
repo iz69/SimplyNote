@@ -9,7 +9,7 @@ from .auth import get_current_user, init_users, oauth2_scheme, router as auth_ro
 from .config import load_config
 
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import os, logging, shutil, uuid
 import unicodedata
@@ -162,6 +162,8 @@ def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(
         d["tags"] = d["tags"].split(",") if d["tags"] else []
 
         # 添付ファイルを取得して追加
+
+
         cur2 = conn.cursor()
         cur2.execute(
             "SELECT id, filename_original, filename_stored FROM attachments WHERE note_id=?",
@@ -239,7 +241,8 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
     current_user = get_current_user(token)
     user_id = current_user["id"]
 
-    now = datetime.utcnow().isoformat()
+#    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
 
     # 改行コードの正規化
     content = normalize_newlines(note.content)
@@ -280,7 +283,8 @@ def update_note(
     current_user = get_current_user(token)
     user_id = current_user["id"]
 
-    now = datetime.utcnow().isoformat()
+#    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
 
     # ノートの存在チェックとis_importantの取得
 #    cur.execute("SELECT id FROM notes WHERE id=?", (note_id,))
@@ -420,16 +424,18 @@ def upload_attachment( note_id: int, request: Request, file: UploadFile = File(.
     with open(dest_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    now = datetime.now(timezone.utc).isoformat()
+
     # DB登録
     cur.execute(
         """
         INSERT INTO attachments (note_id, filename_original, filename_stored, uploaded_at)
         VALUES (?, ?, ?, ?)
-        RETURNING id
         """,
-        (note_id, file.filename, safe_name, datetime.utcnow().isoformat()),
+        (note_id, file.filename, safe_name, now ),
     )
-    attachment_id = cur.fetchone()[0]
+    attachment_id = cur.lastrowid
+##        RETURNING id
 
     conn.commit()
     conn.close()
@@ -440,7 +446,7 @@ def upload_attachment( note_id: int, request: Request, file: UploadFile = File(.
         "url": f"/files/{safe_name}",
     }
 
-app.delete("/attachments/{attachment_id}")
+@app.delete("/attachments/{attachment_id}")
 def delete_attachment( attachment_id: int, token: str = Depends(oauth2_scheme),):
 
     conn = get_connection()
@@ -639,6 +645,8 @@ def toggle_important(note_id: int, token: str = Depends(oauth2_scheme)):
     current_flag = row["is_important"] or 0
     new_flag = 0 if current_flag else 1
 
+    now = datetime.now(timezone.utc).isoformat()
+
     # 更新
     cur.execute( """
         UPDATE notes
@@ -646,7 +654,7 @@ def toggle_important(note_id: int, token: str = Depends(oauth2_scheme)):
             updated_at   = ?
         WHERE id = ?
           AND user_id = ?
-    """, (new_flag, datetime.utcnow().isoformat(), note_id, user_id),)
+    """, (new_flag, now, note_id, user_id),)
 
     conn.commit()
     conn.close()
@@ -737,7 +745,12 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
                 title = note_parts[1]
 
             # --- ZIP内の更新日時を datetime に変換 ---
-            updated_at = datetime(*info.date_time)
+            # zip内のファイルのタイムゾーンが不明なのでサーバのタイムゾーンと合わせる
+#            updated_at = datetime(*info.date_time)
+            local_tz = datetime.datetime.now().astimezone().tzinfo
+            local = datetime.datetime(*info.date_time, tzinfo=local_tz)
+            utc = local.astimezone(datetime.timezone.utc)
+            updated_at = utc.isoformat()
 
 #            # --- タグ行を本文から分離 ---
 #            tags = []
@@ -818,7 +831,9 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
                         with open(stored_path, "wb") as f:
                             f.write(data)
 
-                        uploaded_at = datetime.now().isoformat()
+#                        uploaded_at = datetime.now().isoformat()
+                        uploaded_at = datetime.now(timezone.utc).isoformat() 
+
                         cur.execute(
                             """
                             INSERT INTO attachments (note_id, filename_original, filename_stored, uploaded_at)
