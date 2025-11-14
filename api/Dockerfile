@@ -1,8 +1,8 @@
 FROM python:3.12-slim
 
-WORKDIR /api
+WORKDIR /
 
-COPY api ./
+COPY . /api
 
 RUN pip install --no-cache-dir \
     fastapi \
@@ -13,5 +13,6 @@ RUN pip install --no-cache-dir \
     python-multipart \
     "bcrypt<4.0.0"
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
-##CMD ["gunicorn", "app.main:app", "-k", "uvicorn.workers.UvicornWorker", "-w", "4", "-b", "0.0.0.0:8000"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+
+##CMD ["gunicorn", "api.main:app", "-k", "uvicorn.workers.UvicornWorker", "-w", "4", "-b", "0.0.0.0:8000"]
