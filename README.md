@@ -29,7 +29,7 @@ Includes a Vim plugin and an Android app (in another repositories).
 
 ### Vim plugin
 https://github.com/iz69/SimplyNote_vim<br/>
-<img src="https://github.com/user-attachments/assets/4fa5f6fa-32e5-417e-ad4f-a921d7abf833" width="450" alt="SimplyNote_vim" />
+<img src="https://github.com/user-attachments/assets/eeb41852-6d84-40a1-ba92-8e06f5c01caa" width="450" alt="SimplyNote_vim" />
 
 ### Flutter Apps (Android)
 <img src="https://github.com/user-attachments/assets/1dae6e88-be43-4697-9513-c0b023164bcc" width="300" alt="SimplyNote_Android" />
