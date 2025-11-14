@@ -15,23 +15,9 @@ import os, logging, shutil, uuid
 import unicodedata
 import io, zipfile, re
 
-
 # ------------------------------------------------------------
 # FastAPI
 # ------------------------------------------------------------
-
-# base_path = os.getenv("BASE_PATH", "/").rstrip("/") + "/"
-#app = FastAPI(
-#    title="SimplyNote API",
-#    docs_url=None if not swagger_enabled else "/docs",
-#    redoc_url=None if not swagger_enabled else "/redoc",
-#    swagger_ui_parameters={
-#        "url": f"{base_path}/openapi.json",
-#    },
-#    servers=[
-#        {"url": base_path.rstrip("/")},
-#    ],
-#)
 
 base_path = os.getenv("BASE_PATH", "/").rstrip("/")
 swagger_enabled = os.getenv("SWAGGER_API_DOCS", "true").lower() not in ["false", "0", "no"]
@@ -120,8 +106,6 @@ def startup():
             logger.info(f"=== StaticFiles mount  name: {route.name}, path: {route.path}, directory: {route.app.directory}")
 
 # ------------------------------------------------------------
-# Notes CRUD
-# ------------------------------------------------------------
 
 @app.get("/notes", response_model=list[NoteOut])
 def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(oauth2_scheme)):
@@ -132,7 +116,7 @@ def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(
     user_id = current_user["id"]
 
     if tag:
-        # 特定タグが指定された場合：そのタグを持つノートだけ
+        # タグ検索 (未使用)
         cur.execute("""
             SELECT n.*,
                    GROUP_CONCAT(t2.name, ',') AS tags
@@ -146,7 +130,6 @@ def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(
             ORDER BY is_important DESC, updated_at DESC
         """, (tag, user_id))
     else:
-        # 全ノート
         cur.execute("""
             SELECT n.*,
                    GROUP_CONCAT(t.name, ',') AS tags
@@ -163,9 +146,7 @@ def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(
         d = dict(row)
         d["tags"] = d["tags"].split(",") if d["tags"] else []
 
-        # 添付ファイルを取得して追加
-
-
+        # 添付ファイル
         cur2 = conn.cursor()
         cur2.execute(
             "SELECT id, filename_original, filename_stored FROM attachments WHERE note_id=?",
@@ -210,11 +191,13 @@ def get_note(note_id: int, request: Request, token: str = Depends(oauth2_scheme)
 
     d = dict(row)
 
+    # 重要マーク
     d["is_important"] = int(d["is_important"])
 
+    # タグ
     d["tags"] = d["tags"].split(",") if d["tags"] else []
 
-    # 添付ファイルを取得して追加
+    # 添付ファイル
     cur.execute(
         "SELECT id, filename_original, filename_stored FROM attachments WHERE note_id=?",
         (note_id,),
@@ -243,13 +226,11 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
     current_user = get_current_user(token)
     user_id = current_user["id"]
 
-#    now = datetime.utcnow().isoformat()
     now = datetime.now(timezone.utc).isoformat()
 
     # 改行コードの正規化
     content = normalize_newlines(note.content)
 
-    # ノート本体
     cur.execute(
         "INSERT INTO notes (user_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
         (user_id, note.title, content, now, now),
@@ -285,15 +266,9 @@ def update_note(
     current_user = get_current_user(token)
     user_id = current_user["id"]
 
-#    now = datetime.utcnow().isoformat()
     now = datetime.now(timezone.utc).isoformat()
 
     # ノートの存在チェックとis_importantの取得
-#    cur.execute("SELECT id FROM notes WHERE id=?", (note_id,))
-#    if not cur.fetchone():
-#        conn.close()
-#        logger.warning(f"[update_note] note {note_id} not found for user {user_id}")
-#        raise HTTPException(status_code=404, detail="Note not found")
     cur.execute("SELECT is_important FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
     row = cur.fetchone()
     if not row:
@@ -310,21 +285,20 @@ def update_note(
         (note.title, content, now, note_id, user_id),
     )
 
-    # 添付ファイル情報を取得
+    # 添付ファイル
     cur.execute("SELECT id, filename_original, filename_stored FROM attachments WHERE note_id=?", (note_id,))
     files = [
         {"id": fid, "filename": fname, "url": f"/files/{stored}"}
         for fid, fname, stored in cur.fetchall()
     ]
 
-    # タグ情報を取得
+    # タグ情報
     cur.execute("SELECT t.name FROM tags t JOIN note_tags nt ON t.id = nt.tag_id WHERE nt.note_id = ?", (note_id,))
     tags = [row[0] for row in cur.fetchall()]
 
     conn.commit()
     conn.close()
 
-    # 添付ファイルとタグは別でAPIで
     return {
         "id": note_id,
         "title": note.title,
@@ -348,25 +322,22 @@ def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
     current_user = get_current_user(token)
     user_id = current_user["id"]
 
-    # まず「自分のノートか」を確認
     cur.execute("SELECT id FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
     row = cur.fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # 添付ファイルパスを取得
+    # 添付ファイルパス
     cur.execute("SELECT filename_stored FROM attachments WHERE note_id=?", (note_id,))
     files = [row[0] for row in cur.fetchall()]
 
-    # 添付ファイルのDBレコードを削除
+    # 添付ファイルのDBレコード
     cur.execute("DELETE FROM attachments WHERE note_id=?", (note_id,))
 
-    # ノート本体を削除
     cur.execute("DELETE FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
     deleted = cur.rowcount
 
-    # 不要タグ・ゴミ箱メンテナンス
     run_maintenance(user_id=user_id)
 
     conn.commit()
@@ -374,7 +345,7 @@ def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
 
     store_dir = config["upload"]["dir"]
 
-    # 実ファイル削除（DBクローズ後にやる）
+    # 実ファイル削除
     for filename in files:
         try:
             path = os.path.join(config["upload"]["dir"], filename)
@@ -399,7 +370,6 @@ def upload_attachment( note_id: int, request: Request, file: UploadFile = File(.
     current_user = get_current_user(token)
     user_id = current_user["id"]
 
-    # まず「自分のノートか」を確認
     cur.execute("SELECT id FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
     if not cur.fetchone():
         conn.close()
@@ -414,7 +384,7 @@ def upload_attachment( note_id: int, request: Request, file: UploadFile = File(.
     safe_name = f"{uuid.uuid4().hex}{ext}"
     dest_path = os.path.join(upload_dir, safe_name)
 
-    # サイズ制限（簡易チェック）
+    # サイズ制限
     file.file.seek(0, os.SEEK_END)
     size = file.file.tell()
     file.file.seek(0)
@@ -428,7 +398,6 @@ def upload_attachment( note_id: int, request: Request, file: UploadFile = File(.
 
     now = datetime.now(timezone.utc).isoformat()
 
-    # DB登録
     cur.execute(
         """
         INSERT INTO attachments (note_id, filename_original, filename_stored, uploaded_at)
@@ -437,7 +406,6 @@ def upload_attachment( note_id: int, request: Request, file: UploadFile = File(.
         (note_id, file.filename, safe_name, now ),
     )
     attachment_id = cur.lastrowid
-##        RETURNING id
 
     conn.commit()
     conn.close()
@@ -457,14 +425,6 @@ def delete_attachment( attachment_id: int, token: str = Depends(oauth2_scheme),)
     current_user = get_current_user(token)
     user_id = current_user["id"]
 
-    # 添付ファイル情報の取得
-#    cur.execute("SELECT filename_stored FROM attachments WHERE id=?", (attachment_id,))
-#    row = cur.fetchone()
-#    if not row:
-#        conn.close()
-#        raise HTTPException(status_code=404, detail="Attachment not found")
-
-    # 添付ファイル + 所有者チェック
     cur.execute("""
         SELECT a.filename_stored
         FROM attachments a
@@ -507,7 +467,6 @@ def add_tag(note_id: int, tag: dict, token: str = Depends(oauth2_scheme)):
     current_user = get_current_user(token)
     user_id = current_user["id"]
 
-    # ノートの存在チェック
     cur.execute("SELECT id FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
     if not cur.fetchone():
         conn.close()
@@ -519,20 +478,19 @@ def add_tag(note_id: int, tag: dict, token: str = Depends(oauth2_scheme)):
         conn.close()
         raise HTTPException(status_code=400, detail="Tag name required")
 
-    # タグがなければ作成
+    # タグ作成
     cur.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag_name,))
     cur.execute("SELECT id FROM tags WHERE name=?", (tag_name,))
     tag_id = cur.fetchone()[0]
 
-    # note_tags に関連付け（重複は無視）
+    # note_tags 関連付け
     cur.execute("INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?, ?)", (note_id, tag_id))
 
     conn.commit()
 
-    # 不要タグ・ゴミ箱メンテナンス
     run_maintenance(user_id=user_id)
 
-    # 現在のタグ一覧を返す
+    # タグ一覧を返す
     cur.execute("""
         SELECT t.name FROM tags t
         JOIN note_tags nt ON t.id = nt.tag_id
@@ -567,14 +525,13 @@ def remove_tag(note_id: int, tag_name: str, token: str = Depends(oauth2_scheme))
         raise HTTPException(status_code=404, detail="Tag not found")
     tag_id = tag_row[0]
 
-    # note_tags から削除
+    # note_tags
     cur.execute("DELETE FROM note_tags WHERE note_id=? AND tag_id=?", (note_id, tag_id))
     conn.commit()
 
-    # 不要タグ・ゴミ箱メンテナンス
     run_maintenance(user_id=user_id)
 
-    # 現在のタグ一覧を返す
+    # タグ一覧を返す
     cur.execute("""
         SELECT t.name FROM tags t
         JOIN note_tags nt ON t.id = nt.tag_id
@@ -724,7 +681,7 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
 
         for info in zf.infolist():
 
-            # --- テキストファイルのみ対象 ---
+            # .txt, .md 
             if not info.filename.endswith((".txt", ".md")):
                 continue
 
@@ -735,7 +692,7 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
                 skipped += 1
                 continue
 
-            # --- ファイル名分離 (例: 123`タイトル.txt or タイトル.txt) ---
+            # ファイル名分離 (例: 123`タイトル.txt or タイトル.txt)
             name = info.filename.rsplit("/", 1)[-1]
             base = name.rsplit(".", 1)[0]
 
@@ -746,24 +703,14 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
                 export_note_id = note_parts[0]
                 title = note_parts[1]
 
-            # --- ZIP内の更新日時を datetime に変換 ---
+            # ZIP内の更新日時を datetime に変換
             # zip内のファイルのタイムゾーンが不明なのでサーバのタイムゾーンと合わせる
-#            updated_at = datetime(*info.date_time)
             local_tz = datetime.datetime.now().astimezone().tzinfo
             local = datetime.datetime(*info.date_time, tzinfo=local_tz)
             utc = local.astimezone(datetime.timezone.utc)
             updated_at = utc.isoformat()
 
-#            # --- タグ行を本文から分離 ---
-#            tags = []
-#            content_text = text
-#            if "\n---\nTags:" in text:
-#                body_parts = text.split("\n---\nTags:", 1)
-#                content_text = body_parts[0].rstrip("\n\r")
-#                tag_line = body_parts[1].strip()
-#                tags = [t.strip() for t in tag_line.split(",") if t.strip()]
-
-            # --- タグ・重要フラグなどのメタデータを本文から分離 ---
+            # タグ・重要フラグなどのメタデータを本文から分離
             tags = []
             is_important = 0
             content_text = text
@@ -781,8 +728,7 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
                         val = line.replace("Important:", "", 1).strip().lower()
                         is_important = val
 
-
-            # --- タイトル重複チェック ---
+            # タイトル重複チェック
             cur.execute("SELECT id FROM notes WHERE user_id=? AND title=?", (user_id, title))
             if cur.fetchone():
                 # note_id 付きでない場合は重複を避けるため suffix を付加
@@ -792,7 +738,7 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
             # 改行コードの正規化
             content = normalize_newlines(content_text)
 
-            # --- ノート登録 ---
+            # ノート登録
             cur.execute(
                 """
                 INSERT INTO notes (user_id, title, content, is_important, created_at, updated_at)
@@ -802,7 +748,7 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
             )
             note_id = cur.lastrowid
 
-            # --- タグ登録 ---
+            # タグ登録
             for tag_name in tags:
                 cur.execute("SELECT id FROM tags WHERE name=?", (tag_name,))
                 tag = cur.fetchone()
@@ -881,7 +827,7 @@ def export_notes(token: str = Depends(oauth2_scheme)):
             raw_title = note["title"] or "untitled"
             safe_title = _sanitize_name(raw_title, maxlen=80)
 
-            # --- タグ取得（← これが無いと tags が未定義になる）---
+            # タグ取得
             cur.execute(
                 """
                 SELECT t.name
@@ -894,10 +840,6 @@ def export_notes(token: str = Depends(oauth2_scheme)):
             tags = [row["name"] for row in cur.fetchall()]
 
             # 本文 + タグ追記
-#            text = note["content"] or ""
-#            if tags:
-#                text += "\n\n---\nTags: " + ", ".join(tags)
-
             text = note["content"] or ""
             lines = [text]
 
@@ -918,7 +860,7 @@ def export_notes(token: str = Depends(oauth2_scheme)):
             # 本文ファイルは note_id を含めて一意化
             txt_name = f"{note_id}`{safe_title}.txt"
 
-            # --- updated_at をファイル日時に設定 ---
+            # updated_at をファイル日時に設定
             updated_at = note["updated_at"]
 
             if updated_at:
@@ -932,7 +874,7 @@ def export_notes(token: str = Depends(oauth2_scheme)):
                 # updated_at 無い場合は普通に書き込む
                 zf.writestr(txt_name, text)
 
-            # --- 添付一覧取得（← これが無いと attachments が未定義になる）---
+            # 添付一覧取得
             cur.execute(
                 """
                 SELECT filename_original, filename_stored
