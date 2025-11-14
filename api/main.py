@@ -705,10 +705,10 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
 
             # ZIP内の更新日時を datetime に変換
             # zip内のファイルのタイムゾーンが不明なのでサーバのタイムゾーンと合わせる
-            local_tz = datetime.datetime.now().astimezone().tzinfo
-            local = datetime.datetime(*info.date_time, tzinfo=local_tz)
-            utc = local.astimezone(datetime.timezone.utc)
-            updated_at = utc.isoformat()
+            local_tz = datetime.now().astimezone().tzinfo
+            local = datetime(*info.date_time, tzinfo=local_tz)
+            utc = local.astimezone(timezone.utc)
+            updated_at = utc
 
             # タグ・重要フラグなどのメタデータを本文から分離
             tags = []
