@@ -13,6 +13,8 @@ services:
       - ADMIN_PASS=password
       - BASE_PATH=/simplynote-api
       - SWAGGER_API_DOCS=false
+      - EXPIRE_ACCESS_TOKEN_MINUTES=60
+      - EXPIRE_REFRESH_TOKEN_DAYS=30
 
   simplynote-ui:
     container_name: simplynote-ui

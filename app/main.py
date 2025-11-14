@@ -15,6 +15,7 @@ import os, logging, shutil, uuid
 import unicodedata
 import io, zipfile, re
 
+
 # ------------------------------------------------------------
 # FastAPI
 # ------------------------------------------------------------
@@ -105,6 +106,7 @@ def startup():
             "role": "admin"
         })
     init_users(users)
+
 
     # 添付ファイルの保存ディレクトリ
     upload_dir = os.path.abspath(config["upload"]["dir"])

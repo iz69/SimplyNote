@@ -19,9 +19,9 @@ DEFAULT_CONFIG = {
         "enabled": True,
         "auto_empty_days": 30            # ゴミ箱を自動的に空にするまでの日数
     },
-#    "users": [
-#        {"username": "user",  "password": "user_pass"},
-#    ]
+#   , "users": [
+#         {"username": "user",  "password": "user_pass"}
+#     ]
 }
 
 def load_config():

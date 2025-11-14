@@ -4,34 +4,6 @@ from pathlib import Path
 
 _config = None
 
-def get_connection():
-
-    if _config is None:
-        raise RuntimeError("init_db(config) が呼ばれていません")
-
-    db_cfg = _config.get("database", {})
-    db_type = db_cfg.get("type", "sqlite")
-
-    if db_type == "sqlite":
-
-        db_path = Path(db_cfg.get("path", "./data/simplynote.db"))
-
-        ## db_path = _config["database"]["path"]
-        ## os.makedirs(os.path.dirname(db_path), exist_ok=True)
-
-        db_path = Path(db_cfg.get("path", "./data/simplynote.db"))
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        conn = sqlite3.connect(db_path, timeout=10.0, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.row_factory = sqlite3.Row  # 辞書形式で取得
-
-        return conn
-
-    else:
-        raise NotImplementedError(f"Unsupported database type: {db_type}")
-
-
 def init_db(config):
 
     global _config
@@ -128,4 +100,31 @@ def init_db(config):
     conn.commit()
     conn.close()
 
+
+def get_connection():
+
+    if _config is None:
+        raise RuntimeError("init_db(config) が呼ばれていません")
+
+    db_cfg = _config.get("database", {})
+    db_type = db_cfg.get("type", "sqlite")
+
+    if db_type == "sqlite":
+
+        db_path = Path(db_cfg.get("path", "./data/simplynote.db"))
+
+        ## db_path = _config["database"]["path"]
+        ## os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+        db_path = Path(db_cfg.get("path", "./data/simplynote.db"))
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        conn = sqlite3.connect(db_path, timeout=10.0, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.row_factory = sqlite3.Row  # 辞書形式で取得
+
+        return conn
+
+    else:
+        raise NotImplementedError(f"Unsupported database type: {db_type}")
 

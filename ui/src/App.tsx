@@ -11,8 +11,8 @@ export default function App() {
 
   const BASE_PATH = import.meta.env.VITE_BASE_PATH || "";
 
-  const API_URL = import.meta.env.VITE_API_URL || "/api";
-  const API_BASE = new URL(API_URL, window.location.origin).toString();
+//  const API_URL = import.meta.env.VITE_API_URL || "/api";
+//  const API_BASE = new URL(API_URL, window.location.origin).toString();
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [selected, setSelected] = useState<Note | null>(null);
@@ -582,16 +582,6 @@ export default function App() {
 
           <div className="flex items-center space-x-2">
           
-            {/* 更新ボタン */}
-            <button
-              onClick={() => {
-                fetchNotes();
-                fetchTags();
-              }} className="bg-blue-200 text-white px-1 py-1 rounded hover:bg-blue-600" title="更新" >
-              🔄
-            </button>
-
-
             {/* 新規ボタン */}
             <button
               onClick={handleNew}
@@ -611,9 +601,19 @@ export default function App() {
 
           {/* ドロップダウンメニュー */}
           {showMenu && (
-            <div
-              className="absolute top-12 left-3 bg-white border border-gray-200 rounded-lg shadow-lg z-10 
-                         transition-all duration-150 transform origin-top" >
+            <div className="absolute top-12 left-3 bg-white border border-gray-200 rounded-lg shadow-lg z-10 
+                            transition-all duration-150 transform origin-top" >
+              <button
+                className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                onClick={() => {
+                  fetchNotes();
+                  fetchTags();
+                  setShowMenu(false);
+                }}>
+                🔄 Update
+              </button>
+
+              <div className="border-t border-gray-200 my-1"></div>
 
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-gray-100"
