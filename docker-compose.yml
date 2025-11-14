@@ -2,35 +2,31 @@ services:
 
   simplynote-api:
     container_name: simplynote-api
-    build: .
+    build: ./api
     restart: always
     ports:
       - "18888:8000"
     volumes:
       - ./data:/data
     environment:
-      - TZ=Asia/Tokyo
-      - ADMIN_USER=admin
-      - ADMIN_PASS=password
-      - BASE_PATH=/simplynote-api
-      - SWAGGER_API_DOCS=false
-      - EXPIRE_ACCESS_TOKEN_MINUTES=60
-      - EXPIRE_REFRESH_TOKEN_DAYS=30
+      TZ: Asia/Tokyo
+      ADMIN_USER: admin
+      ADMIN_PASS: password
+      BASE_PATH: /simplynote-api
+      SWAGGER_API_DOCS: false
+      EXPIRE_ACCESS_TOKEN_MINUTES: 60
+      EXPIRE_REFRESH_TOKEN_DAYS: 30
 
   simplynote-ui:
     container_name: simplynote-ui
-    image: node:20
+    build: ./ui
     restart: always
     ports:
       - "15173:5173"
-    volumes:
-      - ./ui:/ui
     depends_on:
       - simplynote-api
-    working_dir: /ui
-#    command: sh -c "npm install && npm run build"
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     environment:
       - VITE_BASE_PATH=/simplynote
       - VITE_API_URL=/simplynote-api
+
 
