@@ -2,19 +2,18 @@ services:
 
   simplynote-api:
     container_name: simplynote-api
-##    build: ./api                           # for Dev
 ##    restart: always                        # for Dev
-    ports:
-      - "18888:8000"
+##    build: ./api                           # for Dev
 ##    volumes:                               # for Dev
 ##      - ./api/data:/data                   # for Dev
+    ports:
+      - "18888:8000"
     environment:
       TZ: Asia/Tokyo
-      ADMIN_USER: admin                    # for Dev
-      ADMIN_PASS: password                 # for Dev
+      ADMIN_USER: admin
+      ADMIN_PASS: password
       BASE_PATH: /simplynote-api
-##      SWAGGER_API_DOCS: false              # for Dev
-      SWAGGER_API_DOCS: true                 # for My Setting
+      SWAGGER_API_DOCS: false
       EXPIRE_ACCESS_TOKEN_MINUTES: 60
       EXPIRE_REFRESH_TOKEN_DAYS: 30
 
@@ -32,9 +31,9 @@ services:
 
   simplynote-ui:
     container_name: simplynote-ui
-##    build: ./ui                            # for Dev
     image: node:20                           # for Dev
 ##    restart: always                        # for Dev
+##    build: ./ui                            # for Dev
     ports:
       - "15173:5173"
 #    depends_on:                              # for Dev

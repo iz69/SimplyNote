@@ -10,8 +10,6 @@ import { basePath } from "./utils"
 
 async function bootstrap() {
 
-//  const cfg = await loadConfig()
-
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <BrowserRouter basename={basePath()}>

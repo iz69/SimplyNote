@@ -1,16 +1,13 @@
 // api.ts
 import { apiUrl } from './utils'
 
-export interface FileOut {
-  id: number;
-  filename: string;
-  url: string;
-}
-
 export interface Note {
   id: number;
   title: string;
   content: string;
+  is_important?: number
+  tags?: string[]
+  files?: Attachment[]
   updated_at?: string;
   created_at?: string;
 }
@@ -211,7 +208,6 @@ export async function toggleStar(
   return data.is_important;   // バックエンドが {"is_important": 1} みたいに返す想定
 }
 
-
 // -------------------------
 
 export async function getNoteDetail(token: string, id: number): Promise<Note> {
@@ -256,11 +252,7 @@ export async function saveAttachments(
   draftFiles: File[]
 ): Promise<Note> {
 
-  if( draftFiles.length === 0 ) { return; }
-
-//  for (const f of draftFiles) {
-//    await uploadAttachment(token, noteId, f);
-//  }
+  // エラーチェックは呼び出し元で済
 
   // 並列アップロード
   await Promise.all(draftFiles.map((f) => uploadAttachment(token, noteId, f)));

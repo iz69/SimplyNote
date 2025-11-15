@@ -3,6 +3,7 @@ import { FilePlus, Clock } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { refreshAccessToken } from "./api";
+import type { Note, Tag, Attachment } from "./api";
 import { getNotes, createNote, updateNote, deleteNote, saveNote } from "./api";
 import { saveAttachments, removeAttachment, getAllTags, addTag, removeTag, toggleStar } from "./api";
 import { importNotes, exportNotes } from "./api";
@@ -21,9 +22,10 @@ export default function App() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState(selected?.title || "");
 
-  const [draftFiles, setDraftFiles] = useState([]);             // 新しく追加するファイル
-  const [attachments, setAttachments] = useState([]);           // サーバ上の既存添付ファイル
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [draftFiles, setDraftFiles] = useState<File[]>([]);
   const [previewFile, setPreviewFile] = useState<any | null>(null);
+
 
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState("");
@@ -127,7 +129,7 @@ export default function App() {
   // --------------------
 
   // JWT の exp を読み取る関数を App.tsx に追加
-  function parseJwtExp(token) {
+  function parseJwtExp(token: string) {
     try {
       const base64Url = token.split(".")[1];
       const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
@@ -138,7 +140,7 @@ export default function App() {
     }
   }
   
-  function msUntilExpiry(token) {
+  function msUntilExpiry(token: string) {
     const expMs = parseJwtExp(token);
     return expMs ? expMs - Date.now() : null;
   }
@@ -173,10 +175,10 @@ export default function App() {
   // --------------------
 
   // 入力保存タイマー
-  const saveTimer = useRef<NodeJS.Timeout | null>(null);
+  const saveTimer = useRef<number | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
+    const value = (e.target as HTMLTextAreaElement).value;
     setDraft(value);
 
     if (selected?.id) {
@@ -364,6 +366,7 @@ export default function App() {
   // 添付ファイル削除
   const handleDeleteAttachment = async (attachmentId: number, filename: string) => {
 
+    if (!selected) return;
     if (!confirm(`「${filename}」を削除しますか？`)) return;
 
     try {
@@ -534,8 +537,11 @@ export default function App() {
 
   useEffect(() => {
 
-    const handleClickOutside = (e) => {
-      if (!e.target.closest(".menu-area")) setShowMenu(false);
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && !target.closest(".menu-area")) {
+        setShowMenu(false);
+      }
     };
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
@@ -563,10 +569,6 @@ export default function App() {
             >
               ☰
             </button>
-
-            {/*
-            <h2 className="font-semibold text-lg">All Notes</h2>
-            */}
 
             {/* All Notes + 件数 */}
             <h2 className="font-semibold text-lg flex items-baseline">
@@ -616,7 +618,8 @@ export default function App() {
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-gray-100"
                 onClick={() => {
-                  document.getElementById("importInput").click();
+                  const input = document.getElementById("importInput") as HTMLInputElement | null;
+                  input?.click();
                   setShowMenu(false);
                 }}
               >
@@ -718,9 +721,7 @@ export default function App() {
                 {unsavedNoteIds.includes(note.id) && (
                   <Clock
                     size={16}
-                    className="text-orange-500 animate=pulse shrink-0 ml-2 flex-none"
-                    title="未保存"
-                  />
+                    className="text-orange-500 animate=pulse shrink-0 ml-2 flex-none"/>
                 )}
               </div>
 
@@ -843,10 +844,13 @@ export default function App() {
                 className="font-semibold text-lg border-b border-gray-300 focus:outline-none focus:border-blue-400 flex-grow mr-2"
                 value={draftTitle}
                 onChange={(e) => setDraftTitle(e.target.value)}
-                onKeyDown={(e) => {
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === "Enter") {
-                    setDraftTitle(e.target.value)
-                    selected.title = e.target.value
+                    const value = e.currentTarget.value;
+                    setDraftTitle(value);
+                    if (selected) {
+                      selected.title = value;
+                    }
                     handleSave()
                     setIsEditingTitle(false)
                   } else if (e.key === "Escape") {
@@ -972,7 +976,7 @@ export default function App() {
         {/* 本文 */}
         <div
           className="flex-1 p-4 overflow-y-auto"
-          onClick={(e) => {
+          onClick={() => {
             // textareaがまだ出ていないときだけ編集開始
             if (!isEditing && selected) {
               setIsEditing(true);
@@ -1090,18 +1094,6 @@ export default function App() {
 
         </div>
 
-        {/* フッター
-        {isEditing && (
-          <div className="p-3 border-t flex justify-start items-center space-x-3">
-            <button
-              onClick={handleSave}
-              className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
-              💾 保存
-            </button>
-          </div>
-        )}
-        */}
-
         {/* フッター */}
         <div className="p-3 border-t flex justify-end items-center space-x-3">
           {!isEditing ? (
@@ -1124,8 +1116,8 @@ export default function App() {
       {previewFile && (
         <div
           className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50"
-          onClick={() => setPreviewFile(null)}
-        >
+          onClick={() => setPreviewFile(null)} >
+
           <div
             className="bg-white rounded-lg shadow-xl p-4 max-w-3xl max-h-[90vh] overflow-auto"
             onClick={(e) => e.stopPropagation()}
@@ -1154,8 +1146,8 @@ export default function App() {
                 <a
                   href={apiUrl(previewFile.url)}
                   target="_blank"
-                  className="text-blue-600 underline"
-                >
+                  className="text-blue-600 underline" >
+
                   ダウンロードする
                 </a>
               </div>
@@ -1163,8 +1155,8 @@ export default function App() {
       
             <button
               onClick={() => setPreviewFile(null)}
-              className="mt-4 bg-gray-200 px-3 py-1 rounded hover:bg-gray-300"
-            >
+              className="mt-4 bg-gray-200 px-3 py-1 rounded hover:bg-gray-300" >
+
               閉じる
             </button>
           </div>
