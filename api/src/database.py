@@ -111,12 +111,10 @@ def get_connection():
 
     if db_type == "sqlite":
 
-        db_path = Path(db_cfg.get("path", "./data/simplynote.db"))
-
         ## db_path = _config["database"]["path"]
         ## os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
-        db_path = Path(db_cfg.get("path", "./data/simplynote.db"))
+        db_path = Path(db_cfg.get("path", "/data/simplynote.db"))
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
         conn = sqlite3.connect(db_path, timeout=10.0, check_same_thread=False)

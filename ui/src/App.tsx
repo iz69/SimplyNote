@@ -6,13 +6,11 @@ import { refreshAccessToken } from "./api";
 import { getNotes, createNote, updateNote, deleteNote, saveNote } from "./api";
 import { saveAttachments, removeAttachment, getAllTags, addTag, removeTag, toggleStar } from "./api";
 import { importNotes, exportNotes } from "./api";
+import { basePath, apiUrl } from "./utils"
 
 export default function App() {
 
-  const BASE_PATH = import.meta.env.VITE_BASE_PATH || "";
-
-//  const API_URL = import.meta.env.VITE_API_URL || "/api";
-//  const API_BASE = new URL(API_URL, window.location.origin).toString();
+  const loginUrl = basePath() + "/login";
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [selected, setSelected] = useState<Note | null>(null);
@@ -23,14 +21,14 @@ export default function App() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState(selected?.title || "");
 
-  const [draftFiles, setDraftFiles] = useState([]);       // 新しく追加するファイル
-  const [attachments, setAttachments] = useState([]);     // サーバ上の既存添付ファイル
+  const [draftFiles, setDraftFiles] = useState([]);             // 新しく追加するファイル
+  const [attachments, setAttachments] = useState([]);           // サーバ上の既存添付ファイル
   const [previewFile, setPreviewFile] = useState<any | null>(null);
 
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState("");
 
-  const [allTags, setAllTags] = useState<Tag[]>([]);      // API から取得する全タグ
+  const [allTags, setAllTags] = useState<Tag[]>([]);            // 全タグ
   const [searchQuery, setSearchQuery] = useState("");
   const [showTagList, setShowTagList] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -164,7 +162,7 @@ export default function App() {
           console.error("Token refresh failed", err);
           localStorage.removeItem("token");
           localStorage.removeItem("refresh_token");
-          window.location.href = `${BASE_PATH}/login`;
+          window.location.href = loginUrl;
         }
       }, ahead);
     }
@@ -230,7 +228,7 @@ export default function App() {
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
-        window.location.href = `${BASE_PATH}/login`;
+        window.location.href = loginUrl;
       } else {
         console.error(err);
       }
@@ -251,7 +249,7 @@ export default function App() {
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
-        window.location.href = `${BASE_PATH}/login`;
+        window.location.href = loginUrl;
       } else {
         console.error(err);
         alert("タグ一覧の取得に失敗しました。");
@@ -292,7 +290,7 @@ export default function App() {
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
-        window.location.href = `${BASE_PATH}/login`;
+        window.location.href = loginUrl;
       } else {
         console.error(err);
         alert("保存に失敗しました。");
@@ -327,7 +325,7 @@ export default function App() {
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
-        window.location.href = `${BASE_PATH}/login`;
+        window.location.href = loginUrl;
       } else {
         console.error(err);
         alert("削除に失敗しました。");
@@ -355,7 +353,7 @@ export default function App() {
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
-        window.location.href = `${BASE_PATH}/login`;
+        window.location.href = loginUrl;
       } else {
         console.error(err);
         alert("保存に失敗しました。");
@@ -383,7 +381,7 @@ export default function App() {
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
-        window.location.href = `${BASE_PATH}/login`;
+        window.location.href = loginUrl;
       } else {
         console.error(err);
         alert("添付ファイルの削除に失敗しました。");
@@ -408,7 +406,7 @@ export default function App() {
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
-        window.location.href = `${BASE_PATH}/login`;
+        window.location.href = loginUrl;
       } else {
         console.error(err);
         alert("タグの追加に失敗しました。");
@@ -432,7 +430,7 @@ export default function App() {
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
-        window.location.href = `${BASE_PATH}/login`;
+        window.location.href = loginUrl;
       } else {
         console.error(err);
         alert("タグの削除に失敗しました。");
@@ -460,7 +458,7 @@ export default function App() {
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
-        window.location.href = `${BASE_PATH}/login`;
+        window.location.href = loginUrl;
       } else {
         console.error(err);
         alert("スター更新に失敗しました。");
@@ -481,7 +479,7 @@ export default function App() {
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
-        window.location.href = `${BASE_PATH}/login`;
+        window.location.href = loginUrl;
       } else {
         console.error(err);
         alert("Import failed.");
@@ -506,7 +504,7 @@ export default function App() {
     } catch (err: any) {
       if (err.message === "unauthorized") {
         localStorage.removeItem("token");
-        window.location.href = `${BASE_PATH}/login`;
+        window.location.href = loginUrl;
       } else {
         console.error(err);
         alert("エクスポートに失敗しました。");
@@ -518,7 +516,7 @@ export default function App() {
   // ログアウト
   const handleLogout = () => {
     localStorage.removeItem("token"); // トークン削除
-    window.location.href = `${BASE_PATH}/login`;
+    window.location.href = loginUrl;
   };
 
   // ------------------------------------------------------------
@@ -1138,15 +1136,13 @@ export default function App() {
       
             {previewFile.filename.match(/\.(png|jpe?g|gif|webp)$/i) ? (
               <img
-//                src={previewFile.url}
-                src={`${API_BASE}${previewFile.url}`}
+                src={apiUrl(previewFile.url)}
                 alt={previewFile.filename}
                 className="max-w-full max-h-[70vh] object-contain mx-auto"
               />
             ) : previewFile.filename.match(/\.(pdf)$/i) ? (
               <iframe
-//                src={previewFile.url}
-                src={`${API_BASE}${previewFile.url}`}
+                src={apiUrl(previewFile.url)}
                 className="w-full h-[70vh]"
                 title={previewFile.filename}
               />
@@ -1156,8 +1152,7 @@ export default function App() {
                   このファイルはプレビューできません。
                 </p>
                 <a
-//                  href={previewFile.url}
-                  href={`${API_BASE}${previewFile.url}`}
+                  href={apiUrl(previewFile.url)}
                   target="_blank"
                   className="text-blue-600 underline"
                 >

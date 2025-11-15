@@ -6,17 +6,23 @@ import './index.css'
 import App from './App'
 import Login from './Login'
 
-const basePath = import.meta.env.VITE_BASE_PATH || '/';
+import { basePath } from "./utils"
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <BrowserRouter basename={basePath}>
-      <Routes>
-        <Route path="/" element={<App />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="*" element={<App />} />
-      </Routes>
-    </BrowserRouter>
-  </StrictMode>
-)
+async function bootstrap() {
 
+//  const cfg = await loadConfig()
+
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <BrowserRouter basename={basePath()}>
+        <Routes>
+          <Route path="/" element={<App />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<App />} />
+        </Routes>
+      </BrowserRouter>
+    </StrictMode>
+  )
+}
+
+bootstrap() 

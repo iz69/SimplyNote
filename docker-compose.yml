@@ -2,31 +2,50 @@ services:
 
   simplynote-api:
     container_name: simplynote-api
-    build: ./api
-    restart: always
+##    build: ./api                           # for Dev
+##    restart: always                        # for Dev
     ports:
       - "18888:8000"
-    volumes:
-      - ./data:/data
+##    volumes:                               # for Dev
+##      - ./api/data:/data                   # for Dev
     environment:
       TZ: Asia/Tokyo
-      ADMIN_USER: admin
-      ADMIN_PASS: password
+      ADMIN_USER: admin                    # for Dev
+      ADMIN_PASS: password                 # for Dev
       BASE_PATH: /simplynote-api
-      SWAGGER_API_DOCS: false
+##      SWAGGER_API_DOCS: false              # for Dev
+      SWAGGER_API_DOCS: true                 # for My Setting
       EXPIRE_ACCESS_TOKEN_MINUTES: 60
       EXPIRE_REFRESH_TOKEN_DAYS: 30
 
+    # for Develop
+    volumes:
+      - ./api/src:/api
+      - ./api/data:/data
+      - ./api/requirements.txt:/requirements.txt
+    image: python:3.12-slim
+    working_dir: /
+    command: >
+      sh -c "pip install -r requirements.txt &&
+             uvicorn api.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=\"*\""
+
+
   simplynote-ui:
     container_name: simplynote-ui
-    build: ./ui
-    restart: always
+##    build: ./ui                            # for Dev
+    image: node:20                           # for Dev
+##    restart: always                        # for Dev
     ports:
       - "15173:5173"
-    depends_on:
-      - simplynote-api
-    environment:
-      - VITE_BASE_PATH=/simplynote
-      - VITE_API_URL=/simplynote-api
+#    depends_on:                              # for Dev
+#      - simplynote-api                       # for Dev
 
+    # for Develop
+    volumes:
+      - ./ui:/ui
+    environment:
+      - VITE_HOST_NAME=myhost.example.com
+    working_dir: /ui
+    command: >
+      sh -c "npm install && npm run dev -- --host 0.0.0.0"
 

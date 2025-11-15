@@ -1,4 +1,6 @@
 // api.ts
+import { apiUrl } from './utils'
+
 export interface FileOut {
   id: number;
   filename: string;
@@ -13,8 +15,6 @@ export interface Note {
   created_at?: string;
 }
 
-const API_URL = import.meta.env.VITE_API_URL || "/api";
-
 const authHeaders = (token: string) => ({
   Authorization: `Bearer ${token}`,
   "Content-Type": "application/json",
@@ -26,7 +26,7 @@ export async function refreshAccessToken() {
   const refreshToken = localStorage.getItem("refresh_token");
   if (!refreshToken) throw new Error("no_refresh_token");
 
-  const res = await fetch(`${API_URL}/auth/refresh`, {
+  const res = await fetch( apiUrl(`/auth/refresh`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh_token: refreshToken }),
@@ -41,7 +41,7 @@ export async function refreshAccessToken() {
 // -------------------------
 
 export async function getNotes(token: string): Promise<Note[]> {
-  const res = await fetch(`${API_URL}/notes`, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(apiUrl(`/notes`), { headers: { Authorization: `Bearer ${token}` } });
   if (res.status === 401) throw new Error("unauthorized");
   if (!res.ok) throw new Error("fetch_error");
   return res.json();
@@ -51,7 +51,7 @@ export async function createNote(
   token: string,
   payload: { title: string; content: string }
 ): Promise<Note> {
-  const res = await fetch(`${API_URL}/notes`, {
+  const res = await fetch(apiUrl(`/notes`), {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
@@ -66,7 +66,7 @@ export async function updateNote(
   id: number,
   payload: { title?: string; content?: string }
 ): Promise<Note> {
-  const res = await fetch(`${API_URL}/notes/${id}`, {
+  const res = await fetch(apiUrl(`/notes/${id}`), {
     method: "PUT",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
@@ -77,7 +77,7 @@ export async function updateNote(
 }
 
 export async function deleteNote(token: string, id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/notes/${id}`, {
+  const res = await fetch(apiUrl(`/notes/${id}`), {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -101,7 +101,7 @@ export async function uploadAttachment(
 ): Promise<Attachment> {
   const formData = new FormData();
   formData.append("file", file);
-  const res = await fetch(`${API_URL}/notes/${noteId}/attachments`, {
+  const res = await fetch(apiUrl(`/notes/${noteId}/attachments`), {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: formData,
@@ -115,7 +115,7 @@ export async function deleteAttachment(
   token: string,
   attachmentId: number
 ): Promise<void> {
-  const res = await fetch(`${API_URL}/attachments/${attachmentId}`, {
+  const res = await fetch(apiUrl(`/attachments/${attachmentId}`), {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -133,7 +133,7 @@ export async function addTag(
   noteId: number,
   tagName: string
 ): Promise<string[]> {
-  const res = await fetch(`${API_URL}/notes/${noteId}/tags`, {
+  const res = await fetch(apiUrl(`/notes/${noteId}/tags`), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -153,7 +153,7 @@ export async function removeTag(
   noteId: number,
   tagName: string
 ): Promise<string[]> {
-  const res = await fetch(`${API_URL}/notes/${noteId}/tags/${encodeURIComponent(tagName)}`, {
+  const res = await fetch(apiUrl(`/notes/${noteId}/tags/${encodeURIComponent(tagName)}`), {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -170,7 +170,7 @@ export interface Tag {
 
 // 全タグ一覧を取得
 export async function getAllTags(token: string): Promise<Tag[]> {
-  const res = await fetch(`${API_URL}/tags`, {
+  const res = await fetch(apiUrl(`/tags`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (res.status === 401) throw new Error("unauthorized");
@@ -183,7 +183,7 @@ export async function getNotesByTag(
   token: string,
   tagName: string
 ): Promise<Note[]> {
-  const res = await fetch(`${API_URL}/notes?tag=${encodeURIComponent(tagName)}`, {
+  const res = await fetch(apiUrl(`/notes?tag=${encodeURIComponent(tagName)}`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (res.status === 401) throw new Error("unauthorized");
@@ -197,7 +197,7 @@ export async function toggleStar(
   token: string,
   noteId: number
 ): Promise<number> {
-  const res = await fetch(`${API_URL}/notes/${noteId}/important`, {
+  const res = await fetch(apiUrl(`/notes/${noteId}/important`), {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -215,7 +215,7 @@ export async function toggleStar(
 // -------------------------
 
 export async function getNoteDetail(token: string, id: number): Promise<Note> {
-  const res = await fetch(`${API_URL}/notes/${id}`, {
+  const res = await fetch(apiUrl(`/notes/${id}`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (res.status === 401) throw new Error("unauthorized");
@@ -293,7 +293,7 @@ export async function importNotes(token: string, zipFile: File): Promise<{
   const formData = new FormData();
   formData.append("file", zipFile);
 
-  const res = await fetch(`${API_URL}/import`, {
+  const res = await fetch(apiUrl(`/import`), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -308,7 +308,7 @@ export async function importNotes(token: string, zipFile: File): Promise<{
 }
 
 export async function exportNotes(token: string): Promise<Blob> {
-  const res = await fetch(`${API_URL}/export`, {
+  const res = await fetch(apiUrl(`/export`), {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
   });

@@ -1,19 +1,23 @@
 import { useState } from "react";
+import { basePath, apiUrl } from './utils'
 
 export default function Login() {
-  const [username, setUsername] = useState("");
+
+  const [username, setUsername] = useState(localStorage.getItem("username") || "");
   const [password, setPassword] = useState("");
+  const [apiBaseUrl, setApiBaseUrl] = useState(localStorage.getItem("api_base_url") || "");
   const [error, setError] = useState("");
 
-  const BASE_PATH = import.meta.env.VITE_BASE_PATH || "";
-  const API_URL = import.meta.env.VITE_API_URL || "/api";
-
   const handleLogin = async (e: React.FormEvent) => {
+
     e.preventDefault();
     setError("");
 
+    localStorage.setItem("username", username);
+    localStorage.setItem("api_base_url", apiBaseUrl);
+
     try {
-      const res = await fetch(`${API_URL}/auth/token`, {
+      const res = await fetch(apiUrl(`/auth/token`), {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ username, password }),
@@ -27,7 +31,7 @@ export default function Login() {
       localStorage.setItem("refresh_token", data.refresh_token);
 
       // メイン画面へ遷移
-      window.location.href = `${BASE_PATH}/`;
+      window.location.href = basePath() + "/";
 
     } catch (err) {
       console.error(err);
@@ -39,7 +43,18 @@ export default function Login() {
     <div className="h-screen flex items-center justify-center bg-gray-50">
       <form onSubmit={handleLogin} className="bg-white p-6 rounded-lg shadow-md w-80">
         <h2 className="text-lg font-semibold mb-4 text-center">ログイン</h2>
+
         {error && <div className="text-red-500 text-sm mb-3">{error}</div>}
+
+
+        <input
+          type="text"
+          placeholder="API URL (例: https://example.com/simplynote-api)"
+          value={apiBaseUrl}
+          onChange={(e) => setApiBaseUrl(e.target.value)}
+          className="w-full border rounded p-2 mb-3 focus:outline-none focus:ring focus:ring-blue-200"
+        />
+
         <input
           type="text"
           placeholder="ユーザー名"

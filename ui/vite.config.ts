@@ -1,51 +1,36 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-
-// https://vite.dev/config/
-/*
-export default defineConfig({
-  base: './',
-  plugins: [react()],
-  build: {
-    outDir: 'dist',
-  },
-  server: {
-    host: '0.0.0.0',
-    port: 5173,
-    allowedHosts: ['localhost', '127.0.0.1', 'tgn.dohne-ray.ts.net'],
-  },
-})
-*/
+import { resolve } from 'path'
 
 export default defineConfig(({ mode }) => {
 
-//  const basePath = process.env.VITE_BASE_PATH || '/'
-  const basePath = '/'
+  const env = loadEnv(mode, process.cwd(), '')
+  const hostName = env.VITE_HOST_NAME || 'localhost'
 
   return {
-    base: basePath.endsWith('/') ? basePath : `${basePath}/`,
+    base: '/',
+    publicDir: 'public',
     plugins: [react()],
+
     build: {
       outDir: 'dist',
+      emptyOutDir: true,
+      rollupOptions: {
+        input: {
+          main: resolve(__dirname, 'index.html'),
+        }
+      }
     },
+
     server: {
       host: '0.0.0.0',
       port: 5173,
-      allowedHosts: ['localhost', '127.0.0.1', 'tgn.dohne-ray.ts.net'],
+      allowedHosts: ['*'],
       hmr: {
-        host: 'tgn.dohne-ray.ts.net',
+        host: hostName,
         protocol: 'wss',
-        path: basePath,
-      },
-/*
-      proxy: {
-        [`${basePath}api`]: {
-          target: 'http://simplynote:8000',
-          changeOrigin: true,
-          rewrite: (path) => path.replace(new RegExp(`^${basePath}api`), ''),
-        },
-      },
-*/
-    },
+      }
+    }
   }
 })
+
