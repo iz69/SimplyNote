@@ -15,8 +15,8 @@ import os, logging, shutil, uuid
 import unicodedata
 import io, zipfile, re
 
-#swagger_enabled = true
-swagger_enabled = false
+#swagger_enabled = True
+swagger_enabled = False
 
 # ------------------------------------------------------------
 # FastAPI

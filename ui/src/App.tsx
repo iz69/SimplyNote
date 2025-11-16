@@ -722,9 +722,9 @@ export default function App() {
               <div className="font-medium flex items-center justify-between">
                 <span className="truncate max-w-[85%]">{note.title}</span>
                 {unsavedNoteIds.includes(note.id) && (
-                  <Clock
-                    size={16}
-                    className="text-orange-500 animate=pulse shrink-0 ml-2 flex-none"/>
+                  <div className="w-5 h-5 ml-2 shrink-0 flex items-center justify-center">
+                    <Clock size={16} className="text-orange-500 animate-pulse" />
+                  </div>
                 )}
               </div>
 
@@ -752,7 +752,7 @@ export default function App() {
                     e.stopPropagation();
                     handleToggleStar(note.id);
                   }}
-                  className="ml-2 shrink-0 hover:opacity-80" >
+                  className="ml-2 shrink-0 w-5 h-5 flex items-center justify-center hover:opacity-80" >
 
                   {note.is_important ? (
                     // 塗りつぶし（重要）
