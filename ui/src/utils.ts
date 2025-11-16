@@ -1,7 +1,7 @@
 export function basePath() {
   const path = window.location.pathname
-  if (path.endsWith("/")) return path
-  return path.replace(/[^/]+$/, "");
+  const dir = path.replace(/[^/]+$/, "")
+  return dir.replace(/\/+$/, "")
 }
 
 export function apiUrl( path: string ) {

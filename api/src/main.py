@@ -15,12 +15,14 @@ import os, logging, shutil, uuid
 import unicodedata
 import io, zipfile, re
 
+#swagger_enabled = true
+swagger_enabled = false
+
 # ------------------------------------------------------------
 # FastAPI
 # ------------------------------------------------------------
 
 base_path = os.getenv("BASE_PATH", "/").rstrip("/")
-swagger_enabled = os.getenv("SWAGGER_API_DOCS", "true").lower() not in ["false", "0", "no"]
 
 app = FastAPI(
     title="SimplyNote API",

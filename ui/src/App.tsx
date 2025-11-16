@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { FilePlus, Clock } from "lucide-react";
+import { FilePlus, RefreshCcw, Clock } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { refreshAccessToken } from "./api";
@@ -16,16 +16,12 @@ export default function App() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selected, setSelected] = useState<Note | null>(null);
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [draftTitle, setDraftTitle] = useState(selected?.title || "");
+  const [title, setTitle] = useState(selected?.title || "");
+  const [content, setContent] = useState("");
 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [draftFiles, setDraftFiles] = useState<File[]>([]);
   const [previewFile, setPreviewFile] = useState<any | null>(null);
-
 
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState("");
@@ -40,7 +36,7 @@ export default function App() {
 
   const [showMenu, setShowMenu] = useState(false);
 
-  const [unsavedNoteIds, setUnsavedNoteIds] = useState<number[]>([]);  // 未保存アイコン
+  const [unsavedNoteIds, setUnsavedNoteIds] = useState<number[]>([]);  // 未保存ノート
 
   // フィルタ済みノート一覧を生成
   const filteredNotes = notes.filter((note) => {
@@ -101,16 +97,16 @@ export default function App() {
   useEffect(() => {
 
     if (!selected) {
-      setDraft("");
-      setDraftTitle("");
+      setTitle("");
+      setContent("");
       setAttachments([]);
       setDraftFiles([]);
       setTags([]);
       return;
     }
   
-    setDraft(selected.content);
-    setDraftTitle(selected.title || "");
+    setTitle(selected.title || "");
+    setContent(selected.content);
     setAttachments(selected.files || []);
     setDraftFiles([]);
     setTags(selected.tags || []);
@@ -122,8 +118,6 @@ export default function App() {
   const handleSelect = (note: Note) => {
     setIsCreating(false);
     setSelected(note);
-    setIsEditing(false);
-    setIsEditingTitle(false);
   };
 
   // --------------------
@@ -179,7 +173,7 @@ export default function App() {
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = (e.target as HTMLTextAreaElement).value;
-    setDraft(value);
+    setContent(value);
 
     if (selected?.id) {
       setUnsavedNoteIds((prev) =>
@@ -192,7 +186,14 @@ export default function App() {
 
     // 1秒後に自動保存
     saveTimer.current = setTimeout(async () => {
+
       if (!token) return;
+
+      if (selected && value === selected.content) {
+        setUnsavedNoteIds((prev) => prev.filter((id) => id !== selected.id));
+        return;
+      }
+
       try {
         if (selected) {
           const updated = await updateNote(token, selected.id, { title: selected.title, content: value });
@@ -264,9 +265,6 @@ export default function App() {
 
     setIsCreating(true);
     setSelected(null);
-
-    setIsEditing(true);
-    setIsEditingTitle(false);
   };
  
   // 保存
@@ -276,7 +274,7 @@ export default function App() {
 
     try {
 
-      const updated = await saveNote( token!, selected, draft );
+      const updated = await saveNote( token!, selected, content );
   
       setSelected(updated);
       setNotes((prev) =>
@@ -285,9 +283,6 @@ export default function App() {
 
       // ✅ 手動保存完了 → 未保存フラグを解除
       setUnsavedNoteIds((prev) => prev.filter((id) => id !== updated.id));
-
-      setIsEditing(false);
-      setIsEditingTitle(false);
 
     } catch (err: any) {
       if (err.message === "unauthorized") {
@@ -321,8 +316,6 @@ export default function App() {
       await deleteNote(token!, selected.id);
       setNotes((prev) => prev.filter((n) => n.id !== selected.id));
       setSelected(null);
-      setIsEditing(false);
-      setIsEditingTitle(false);
 
     } catch (err: any) {
       if (err.message === "unauthorized") {
@@ -420,8 +413,6 @@ export default function App() {
   // タグ削除
   const handleRemoveTag = async (noteId: number, tagName: string) => {
 
-//    if (!confirm(`タグ「${tagName}」を削除しますか？`)) return;
-  
     try {
       const updatedTags = await removeTag(token!, noteId, tagName);
 
@@ -581,7 +572,16 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-2">
-          
+         
+            {/* 更新ボタン */}
+            <button
+              onClick={() => {
+                fetchNotes();
+                fetchTags();
+              }} className="bg-blue-500 text-white px-2 py-2 rounded hover:bg-blue-600" title="更新" >
+              <RefreshCcw className="w-4 h-4" />
+            </button>
+ 
             {/* 新規ボタン */}
             <button
               onClick={handleNew}
@@ -603,6 +603,8 @@ export default function App() {
           {showMenu && (
             <div className="absolute top-12 left-3 bg-white border border-gray-200 rounded-lg shadow-lg z-10 
                             transition-all duration-150 transform origin-top" >
+
+              {/*
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-gray-100"
                 onClick={() => {
@@ -614,6 +616,7 @@ export default function App() {
               </button>
 
               <div className="border-t border-gray-200 my-1"></div>
+              */}
 
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-gray-100"
@@ -705,7 +708,7 @@ export default function App() {
         </div>
 
         {/* フィルタ済みノート一覧 */}
-        <div className="flex-1 border-b overflow-y-auto">
+        <div tabIndex={-1} className="flex-1 border-b overflow-y-auto">
 
           {filteredNotes.map((note) => (
             <div
@@ -724,22 +727,6 @@ export default function App() {
                     className="text-orange-500 animate=pulse shrink-0 ml-2 flex-none"/>
                 )}
               </div>
-
-              {/*
-              <div className="text-sm text-gray-500 flex items-center flex-wrap gap-1">
-                <span className="mr-2">
-                  {note.updated_at && new Date(note.updated_at).toLocaleDateString()}
-                </span>
-                {note.tags?.map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-              */}
 
               <div className="flex items-center justify-between">
   
@@ -760,6 +747,7 @@ export default function App() {
   
                 {/* 右：スター（SVGアイコン） */}
                 <button
+                  tabIndex={-1}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleToggleStar(note.id);
@@ -798,9 +786,11 @@ export default function App() {
 
         {/* フッター */}
 
-        <div className="p-3 border-t mt-auto flex justify-between items-center">
+        <div className="p-3 border-t mt-auto flex justify-between items-center min-h-[58px]">
+
           {/* 左：ログアウトボタン */}
           <button
+            tabIndex={-1}
             onClick={handleLogout}
             className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
           >
@@ -809,6 +799,7 @@ export default function App() {
 
           {/* 右：Trashボタン */}
           <button
+            tabIndex={-1}
             onClick={() => setShowTrashOnly(prev => !prev)}
             className={`flex items-center gap-1 px-3 py-1 rounded ${
               showTrashOnly ? "bg-red-500 text-white" : "bg-gray-200 hover:bg-gray-300"
@@ -830,42 +821,21 @@ export default function App() {
           {/* ヘッダー タイトル＋削除ボタン */}
           <div className="flex justify-between items-center">
 
-            {!isEditingTitle ? (
-              // 表示モード
-              <h2
-                className="font-semibold text-lg cursor-pointer"
-                onClick={() => setIsEditingTitle(true)} >
-                {selected ? selected.title : "New Note..."}
-              </h2>
-            ) : (
-              // 編集モード
-              <input
-                type="text"
-                className="font-semibold text-lg border-b border-gray-300 focus:outline-none focus:border-blue-400 flex-grow mr-2"
-                value={draftTitle}
-                onChange={(e) => setDraftTitle(e.target.value)}
-                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                  if (e.key === "Enter") {
-                    const value = e.currentTarget.value;
-                    setDraftTitle(value);
-                    if (selected) {
-                      selected.title = value;
-                    }
-                    handleSave()
-                    setIsEditingTitle(false)
-                  } else if (e.key === "Escape") {
-                    setIsEditingTitle(false)
-                    setDraftTitle(selected?.title || "")
-                  }
-                }}
-                onBlur={() => {
-                  // フォーカスが外れたらキャンセル扱い
-                  setIsEditingTitle(false)
-                  setDraftTitle(selected?.title || "")
-                }}
-                autoFocus
-              />
-            )}
+            <input
+              type="text"
+              className="font-semibold text-lg border-gray-300 focus:outline-none focus:border-blue-400 flex-grow mr-2"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={(e) => {
+                const value = e.currentTarget.value
+                setTitle(value)
+                if (selected) {
+                  selected.title = value
+                }
+                handleSave()
+              }}
+              autoFocus
+            />
 
             {selected && (
               <div className="flex items-center gap-3">
@@ -874,6 +844,7 @@ export default function App() {
                 {selected && (
 
                   <button
+                    tabIndex={-1}
                     onClick={() => handleToggleStar(selected.id)}
                     className="hover:opacity-80" >
 
@@ -905,11 +876,11 @@ export default function App() {
 
                 {selected && (
                   showTrashOnly ? (
-                    <button onClick={handleDelete} className="text-red-600 hover:text-red-800"> 
+                    <button tabIndex={-1} onClick={handleDelete} className="text-red-600 hover:text-red-800"> 
                       🗑️ 完全削除
                     </button>
                   ) : (
-                    <button onClick={handleRemove} className="text-red-600 hover:text-red-800">
+                    <button tabIndex={-1} onClick={handleRemove} className="text-red-600 hover:text-red-800">
                       🗑️ 削除
                     </button>
                   )
@@ -920,7 +891,6 @@ export default function App() {
           </div>
 
   
-          {/* ヘッダー タグ */}
           {selected && (
  
             <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -975,38 +945,15 @@ export default function App() {
 
         {/* 本文 */}
         <div
-          className="flex-1 p-4 overflow-y-auto"
-          onClick={() => {
-            // textareaがまだ出ていないときだけ編集開始
-            if (!isEditing && selected) {
-              setIsEditing(true);
-            }
-          }} >
-
-          {!isEditing ? (
-            <div className="prose max-w-none whitespace-pre-wrap">
-              <ReactMarkdown remarkPlugins={[[remarkGfm, { breaks: true }]]}>
-                {(selected ? selected.content : "").replace(/\r\n/g, "\n")}
-              </ReactMarkdown>
-            </div>
-          ) : (
+          className="flex-1 p-4 overflow-y-auto" >
             <textarea
-              className="w-full h-full border rounded p-2 focus:outline-none"
-              value={draft}
+              className="w-full h-full rounded p-2 focus:outline-none"
+              value={content}
               onChange={handleChange}
-
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setIsEditing(false)
-                }
-              }}
-
               placeholder="ここにノートを書き始めましょう..."
               autoFocus
             />
-          )}
         </div>
-
 
         {/* 添付ファイル（本文の下・フッターの上） */}
         <div className="px-4 py-3 border-t bg-gray-50">
@@ -1095,13 +1042,10 @@ export default function App() {
         </div>
 
         {/* フッター */}
-        <div className="p-3 border-t flex justify-end items-center space-x-3">
-          {!isEditing ? (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="bg-gray-200 px-3 py-1 rounded hover:bg-gray-300" >
-              ✏️  編集
-            </button>
+        <div className="p-3 border-t flex justify-end items-center space-x-3 min-h-[58px]">
+
+          {!unsavedNoteIds.includes(selected?.id ?? "") ? (
+            <div className="px-3 py-1"> </div>
           ) : (
             <button
               onClick={handleSave}
