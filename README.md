@@ -25,7 +25,7 @@ Includes a Vim plugin and an Android app (in another repositories).
 FastAPI + Sqlite3
 
 ### WebUI
-React
+React<br/>
 <img src="https://github.com/user-attachments/assets/84140cfc-99d3-42f8-ac33-127c705338b1" width="600" alt="SimplyNote_Desktop" />
 
 ### Vim plugin
