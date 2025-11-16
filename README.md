@@ -22,9 +22,10 @@ Includes a Vim plugin and an Android app (in another repositories).
 ---
 
 ### Backend API
-<img src="https://github.com/user-attachments/assets/ee78032d-6b16-43c3-8210-f829df08faff" width="400" alt="FastAPI" />
+FastAPI + Sqlite3
 
 ### WebUI
+React
 <img src="https://github.com/user-attachments/assets/84140cfc-99d3-42f8-ac33-127c705338b1" width="600" alt="SimplyNote_Desktop" />
 
 ### Vim plugin
@@ -37,7 +38,7 @@ https://github.com/iz69/SimplyNote_vim<br/>
 ---
 
 ### License
-This project is licensed under the MIT License.
+This project is licensed under the MIT License.<br/>
 See the LICENSE(https://opensource.org/license/mit/) for details.
 
 ### Support & Donation
