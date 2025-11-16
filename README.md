@@ -1,7 +1,6 @@
-自鯖にsimplenoteぽいのを入れたくて自分用に作ったもの
+自鯖にsimplenoteぽいのを入れたくて自分用に作ったもの<br/>
 気が向いたときに更新
 
-Host
 - debian + nginx (proxy_pass)
 - docker
  - simplynote-api
