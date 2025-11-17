@@ -590,7 +590,7 @@ export default function App() {
         {/* ヘッダー */}
         <div className="p-3 border-b flex justify-between items-center relative menu-area">
 
-          {/* 左：メニュー＋タイトル */}
+          {/* メニュー＋タイトル */}
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setShowMenu(!showMenu)}
@@ -617,14 +617,14 @@ export default function App() {
               onClick={() => {
                 fetchNotes();
                 fetchTags();
-              }} className="bg-blue-500 text-white px-2 py-2 rounded hover:bg-blue-600" title="更新" >
+              }} className="bg-blue-500 text-white px-2 py-2 rounded hover:bg-blue-600" title="Refresh View" >
               <RefreshCcw className="w-4 h-4" />
             </button>
  
             {/* 新規ボタン */}
             <button
               onClick={handleNew}
-              className="bg-green-500 text-white px-2 py-2 rounded hover:bg-green-600" title="新規" >
+              className="bg-green-500 text-white px-2 py-2 rounded hover:bg-green-600" title="New Note" >
               <FilePlus className="w-4 h-4" />
             </button>
           </div>
@@ -651,7 +651,7 @@ export default function App() {
                   fetchTags();
                   setShowMenu(false);
                 }}>
-                🔄 Update
+                🔄 Refresh View
               </button>
 
               <div className="border-t border-gray-200 my-1"></div>
@@ -665,7 +665,7 @@ export default function App() {
                   setShowMenu(false);
                 }}
               >
-                📂 Import
+                📂 Import ZIP Archive
               </button>
 
               <button
@@ -675,7 +675,7 @@ export default function App() {
                   setShowMenu(false);
                 }}
               >
-                💾 Export
+                💾 Export ZIP Archive
               </button>
 
             </div>
@@ -794,7 +794,6 @@ export default function App() {
                   className="ml-2 shrink-0 w-5 h-5 flex items-center justify-center hover:opacity-80" >
 
                   {note.is_important ? (
-                    // 塗りつぶし（重要）
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       viewBox="0 0 24 24"
@@ -803,7 +802,6 @@ export default function App() {
                       <path d="M12 17.27l6.18 3.73-1.64-7.03L21 9.24l-7.19-.61L12 2l-1.81 6.63L3 9.24l4.46 4.73L5.82 21z" />
                     </svg>
                   ) : (
-                    // 枠だけ（未重要）
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       viewBox="0 0 24 24"
@@ -833,7 +831,7 @@ export default function App() {
             onClick={handleLogout}
             className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
           >
-            ログアウト
+            Logout
           </button>
 
           {/* 右：Trashボタン */}
@@ -857,7 +855,7 @@ export default function App() {
         {/* ヘッダー */}
         <div className="p-3 border-b">
 
-          {/* ヘッダー タイトル＋削除ボタン */}
+          {/* タイトル＋削除ボタン */}
           <div className="flex justify-between items-center">
 
             <input
@@ -879,7 +877,7 @@ export default function App() {
             {selected && (
               <div className="flex items-center gap-3">
 
-                {/* ★ スターアイコン（ここが追加部分） */}
+                {/* ★ スターアイコン */}
                 {selected && (
 
                   <button
@@ -888,25 +886,21 @@ export default function App() {
                     className="hover:opacity-80" >
 
                     {selected.is_important ? (
-                      // 塗りつぶし（重要）
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
                         fill="currentColor"
-                        className="w-6 h-6 text-yellow-500"
-                      >
+                        className="w-6 h-6 text-yellow-500" >
                         <path d="M12 17.27l6.18 3.73-1.64-7.03L21 9.24l-7.19-.61L12 2 10.19 8.63 3 9.24l4.46 4.73L5.82 21z" />
                       </svg>
                     ) : (
-                      // 枠だけ（未重要）
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"
-                        className="w-6 h-6 text-gray-400"
-                      >
+                        className="w-6 h-6 text-gray-400" >
                         <path d="M12 17.27l6.18 3.73-1.64-7.03L21 9.24l-7.19-.61L12 2 10.19 8.63 3 9.24l4.46 4.73L5.82 21z" />
                       </svg>
                     )}
@@ -916,11 +910,11 @@ export default function App() {
                 {selected && (
                   showTrashOnly ? (
                     <button tabIndex={-1} onClick={handleDelete} className="text-red-600 hover:text-red-800"> 
-                      🗑️ 完全削除
+                      🗑️ Delete Permanently
                     </button>
                   ) : (
                     <button tabIndex={-1} onClick={handleRemove} className="text-red-600 hover:text-red-800">
-                      🗑️ 削除
+                      🗑️ Trash
                     </button>
                   )
                 )}
@@ -941,7 +935,7 @@ export default function App() {
                 onChange={(e) => setNewTagInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
-                    e.preventDefault(); // フォーム送信防止
+                    e.preventDefault();
                     const value = newTagInput.trim();
                     if (value && selected?.id) {
                       handleAddTag(selected.id, value);
@@ -953,8 +947,8 @@ export default function App() {
                   // フォーカスが外れたらキャンセル（入力だけクリア）
                   setNewTagInput("");
                 }}
-                placeholder="タグを追加..."
-                className="border rounded px-2 py-1 text-sm w-25 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                placeholder="Add tag..."
+                className="border rounded px-2 py-1 text-sm w-25 text-center focus:outline-none focus:ring-1 focus:ring-blue-400" />
 
               {/* タグ一覧 */}
               {tags.map((tag) => (
@@ -989,7 +983,7 @@ export default function App() {
               className="w-full h-full rounded p-2 focus:outline-none"
               value={content}
               onChange={handleChange}
-              placeholder="ここにノートを書き始めましょう..."
+              placeholder="Write your note here..."
               autoFocus
             />
         </div>
@@ -999,7 +993,7 @@ export default function App() {
 
           <div className="flex items-center justify-start flex-wrap gap-3 mb-2">
 
-            <span className="font-semibold text-sm">添付ファイル</span>
+            <span className="font-semibold text-sm">Attachments</span>
 
             {/* 見た目用のカスタムボタン */}
             {selected && (
@@ -1027,7 +1021,7 @@ export default function App() {
             {/* 選択状態の表示 */}
             {draftFiles.length > 0 && (
               <span className="text-sm text-gray-600">
-                { `${draftFiles.length} 件 アップロード待ち` }
+                { `${draftFiles.length} file(s) pending upload` }
               </span>
             )}
           </div>
@@ -1042,7 +1036,7 @@ export default function App() {
                   <button
                     onClick={() => handleDeleteAttachment(f.id, f.filename)}
                     className="mr-2 px-2 py-0.5 rounded cursor-pointer hover:bg-red-500"
-                    title="削除">
+                    title="Delete">
                     🗑️
                   </button>
             
@@ -1089,7 +1083,7 @@ export default function App() {
             <button
               onClick={handleSave}
               className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
-              💾 保存
+              💾 Save
             </button>
           )}
         </div>
@@ -1124,14 +1118,14 @@ export default function App() {
             ) : (
               <div className="text-center">
                 <p className="text-gray-600 mb-3">
-                  このファイルはプレビューできません。
+                  Preview is not available for this file.
                 </p>
                 <a
                   href={apiUrl(previewFile.url)}
                   target="_blank"
                   className="text-blue-600 underline" >
 
-                  ダウンロードする
+                  Download
                 </a>
               </div>
             )}
