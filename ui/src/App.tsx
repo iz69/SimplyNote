@@ -517,10 +517,49 @@ export default function App() {
   // 初回処理
   // ------------------------------------------------------------
 
+  /*
   useEffect(() => {
     fetchNotes();
     fetchTags();
   }, []);
+  */
+
+  useEffect(() => {
+  
+    async function init() {
+      const token = localStorage.getItem("token");
+      const refresh = localStorage.getItem("refresh_token");
+  
+      if (!token || !refresh) {
+        window.location.href = loginUrl;
+        return;
+      }
+  
+      // 初回ロード時に token の期限をチェック
+      const ms = msUntilExpiry(token);
+  
+      // exp が切れてる or 残り少ない時に refresh を試す
+      if (ms !== null && ms < 60_000) {
+
+        try {
+          await refreshAccessToken();
+        } catch {
+          localStorage.removeItem("token");
+          localStorage.removeItem("refresh_token");
+          window.location.href = loginUrl;
+          return;
+        }
+      }
+  
+      // 初期ロード
+      fetchNotes();
+      fetchTags();
+    }
+  
+    init();
+  
+  }, []);
+
 
   // ------------------------------------------------------------
   // UIイベントリスナー

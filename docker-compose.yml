@@ -2,12 +2,12 @@ services:
 
   simplynote-api:
     container_name: simplynote-api
-##    restart: always                        # for Dev
+    restart: always
+    ports:
+      - "18888:8000"
 ##    build: ./api                           # for Dev
 ##    volumes:                               # for Dev
 ##      - ./api/data:/data                   # for Dev
-    ports:
-      - "18888:8000"
     environment:
       TZ: Asia/Tokyo
       ADMIN_USER: admin
@@ -16,7 +16,9 @@ services:
       EXPIRE_ACCESS_TOKEN_MINUTES: 60
       EXPIRE_REFRESH_TOKEN_DAYS: 30
 
+    # ----------------------------------------------------------
     # for Develop
+    # ----------------------------------------------------------
     volumes:
       - ./api/src:/api
       - ./api/data:/data
@@ -25,20 +27,23 @@ services:
     working_dir: /
     command: >
       sh -c "pip install -r requirements.txt &&
-             uvicorn api.main:app --host 0.0.0.0 --port 8000 --proxy-headers --timeout-keep-alive 30 --forwarded-allow-ips=\"*\""
+             uvicorn api.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=\"*\""
 
+  # ----------------------------------------------------------
 
   simplynote-ui:
     container_name: simplynote-ui
-    image: node:20                           # for Dev
-##    restart: always                        # for Dev
-##    build: ./ui                            # for Dev
+    restart: always
     ports:
       - "15173:5173"
-#    depends_on:                              # for Dev
-#      - simplynote-api                       # for Dev
+    depends_on:
+      - simplynote-api
+##    build: ./ui                            # for Dev
 
+    # ----------------------------------------------------------
     # for Develop
+    # ----------------------------------------------------------
+    image: node:20
     volumes:
       - ./ui:/ui
     environment:

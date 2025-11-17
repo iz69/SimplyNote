@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Request, Response, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
@@ -106,6 +106,12 @@ def startup():
     for route in app.routes:
         if hasattr(route, "app") and isinstance(route.app, StaticFiles):
             logger.info(f"=== StaticFiles mount  name: {route.name}, path: {route.path}, directory: {route.app.directory}")
+
+# ------------------------------------------------------------
+
+@app.head("/ping")
+async def ping_head():
+    return Response(status_code=200)
 
 # ------------------------------------------------------------
 
