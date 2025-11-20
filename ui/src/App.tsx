@@ -172,55 +172,105 @@ export default function App() {
   const saveTimer = useRef<number | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = (e.target as HTMLTextAreaElement).value;
-    setContent(value);
 
+    const value = e.target.value;
+    setContent(value);
+  
     if (selected?.id) {
       setUnsavedNoteIds((prev) =>
         prev.includes(selected.id) ? prev : [...prev, selected.id]
       );
     }
-
-    // 入力のたびにタイマーをリセット
+ 
+    // 入力ごとにタイマーリセット
     if (saveTimer.current) clearTimeout(saveTimer.current);
-
-    // 1秒後に自動保存
-    saveTimer.current = setTimeout(async () => {
-
-      if (!token) return;
-
+  
+    saveTimer.current = window.setTimeout(async () => {
+  
+      // ローカル token が消えていたら保存できない
+      if (!localStorage.getItem("token")) return;
+  
+      // 内容が変わってなければ未保存フラグだけ外す
       if (selected && value === selected.content) {
         setUnsavedNoteIds((prev) => prev.filter((id) => id !== selected.id));
         return;
       }
-
+  
       try {
         if (selected) {
-          const updated = await updateNote(token, selected.id, { title: selected.title, content: value });
-          setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
-          setSelected(updated);
 
-          setUnsavedNoteIds((prev) => prev.filter((id) => id !== updated.id));            
+          // 既存ノートの自動保存（401 なら refresh して再実行）
+          const updated = await withAuthRetry((token) =>
+            updateNote(token, selected.id, { title: selected.title, content: value })
+          );
+  
+          setNotes((prev) =>
+            prev.map((n) => (n.id === updated.id ? updated : n))
+          );
 
+          // これ入れるとキャレットが飛ぶ
+//          setSelected(updated);
+  
+          setUnsavedNoteIds((prev) => prev.filter((id) => id !== updated.id));
+  
         } else if (value.trim() !== "") {
           const title = value.split("\n")[0].slice(0, 30) || "New Note...";
-          const created = await createNote(token, { title, content: value });
+          const created = await withAuthRetry((token) =>
+            createNote(token, { title, content: value })
+          );
+  
           setNotes((prev) => [created, ...prev]);
           setSelected(created);
         }
+  
       } catch (err) {
         console.error("Auto save failed:", err);
       }
     }, 1000);
+
   };
 
   // --------------------
 
-  const token = localStorage.getItem("token");
+  async function withAuthRetry<T>(fn: (token: string) => Promise<T>): Promise<T> {
+
+    let token = localStorage.getItem("token");
+  
+    if (!token) {
+      throw new Error("no-token");
+    }
+  
+    try {
+      // まず通常実行
+      return await fn(token);
+    } catch (err: any) {
+      if (err.message !== "unauthorized") {
+        throw err;
+      }
+  
+      // 401 が来た → refresh を試す
+      try {
+        await refreshAccessToken();
+      } catch {
+        // refresh_token もダメ → 強制ログアウト
+        localStorage.removeItem("token");
+        localStorage.removeItem("refresh_token");
+        window.location.href = loginUrl;
+        throw new Error("logout");
+      }
+  
+      // 成功したら新しい token で再実行
+      token = localStorage.getItem("token")!;
+      return await fn(token);
+    }
+  }
+
+//  const token = localStorage.getItem("token");
 
   // ノート一覧取得
   const fetchNotes = async () => {
 
+/*
     try {
       const data = await getNotes(token!);
       setNotes(data);
@@ -236,10 +286,50 @@ export default function App() {
         console.error(err);
       }
     }
+*/
+
+    try {
+      const data = await withAuthRetry((token) =>
+        getNotes(token)
+      );
+  
+      setNotes(data);
+
+      /* 
+      if (data.length > 0) {
+        setSelected(data[0]);
+      }
+      */
+
+      const currentId = selected?.id;
+
+      if (data.length === 0) {
+        setSelected(null);
+        return;
+      }
+
+      // 同じ note がまだ存在する？
+      const found = currentId
+        ? data.find(n => n.id === currentId)
+        : null;
+
+      if (found) {
+        // そのまま維持
+        setSelected(found);
+      } else {
+        // 無くなっていた → 先頭にフォールバック
+        setSelected(data[0]);
+      }
+  
+    } catch (err) {
+      console.error(err);
+      alert("ノート一覧の取得に失敗しました。");
+    }
   };
 
   // タグ一覧を取得
   const fetchTags = async () => {
+/*
     try {
       const data = await getAllTags(token!);
       // data は [{ name: "仕事", note_count: 3 }, ...]
@@ -258,6 +348,19 @@ export default function App() {
         alert("タグ一覧の取得に失敗しました。");
       }
     }
+*/
+    try {
+      const data = await withAuthRetry((token) => getAllTags(token));
+  
+      // Trash を除外
+      const filtered = data.filter(tag => tag.name.toLowerCase() !== "trash");
+  
+      setAllTags(filtered);
+  
+    } catch (err) {
+      console.error(err);
+      alert("タグ一覧の取得に失敗しました。");
+    }
   };
 
   // 新規作成（空ノートを開く）
@@ -272,6 +375,7 @@ export default function App() {
 
     if (!selected) return;
 
+/*    
     try {
 
       const updated = await saveNote( token!, selected, content );
@@ -293,6 +397,25 @@ export default function App() {
         alert("保存に失敗しました。");
       }
     }
+*/
+
+    try {
+      const updated = await withAuthRetry((token) =>
+        saveNote(token, selected, content)
+      );
+  
+      setSelected(updated);
+      setNotes((prev) =>
+        prev.map((n) => (n.id === updated.id ? updated : n))
+      );
+  
+      // 手動保存 → 未保存フラグクリア
+      setUnsavedNoteIds((prev) => prev.filter((id) => id !== updated.id));
+  
+    } catch (err) {
+      console.error(err);
+      alert("保存に失敗しました。");
+    }
   };
  
   // ゴミ箱に移動
@@ -312,6 +435,7 @@ export default function App() {
     if (!selected || !selected.id) return;
     if (!confirm("このノートを削除しますか？")) return;
 
+/*
     try {
       await deleteNote(token!, selected.id);
       setNotes((prev) => prev.filter((n) => n.id !== selected.id));
@@ -326,6 +450,19 @@ export default function App() {
         alert("削除に失敗しました。");
       }
     }
+*/
+
+
+    try {
+      await withAuthRetry((token) => deleteNote(token, selected.id));
+  
+      setNotes((prev) => prev.filter((n) => n.id !== selected.id));
+      setSelected(null);
+  
+    } catch (err) {
+      console.error(err);
+      alert("削除に失敗しました。");
+    }
   };
 
   // 添付ファイル保存
@@ -333,6 +470,7 @@ export default function App() {
 
     if (!selected?.id || draftFiles.length === 0) return;
 
+/*
     try {
 
       const updated = await saveAttachments( token!, selected.id, draftFiles);
@@ -354,6 +492,25 @@ export default function App() {
         alert("保存に失敗しました。");
       }
     }
+*/
+
+    try {
+      const updated = await withAuthRetry((token) =>
+        saveAttachments(token, selected.id, draftFiles)
+      );
+  
+      setDraftFiles([]);
+      setAttachments(updated.files || []);
+  
+      // ノート一覧も更新
+      setNotes((prev) =>
+        prev.map((n) => (n.id === updated.id ? updated : n))
+      );
+  
+    } catch (err) {
+      console.error(err);
+      alert("保存に失敗しました。");
+    }
   };
   
   // 添付ファイル削除
@@ -362,6 +519,7 @@ export default function App() {
     if (!selected) return;
     if (!confirm(`「${filename}」を削除しますか？`)) return;
 
+/*
     try {
 
       const updated = await removeAttachment(token!, selected.id, attachmentId);
@@ -383,11 +541,34 @@ export default function App() {
         alert("添付ファイルの削除に失敗しました。");
       }
     }
+*/
+
+
+    try {
+      const updated = await withAuthRetry((token) =>
+        removeAttachment(token, selected.id, attachmentId)
+      );
+  
+      setDraftFiles([]);
+      setAttachments(updated.files || []);
+  
+      // ノート一覧更新
+      setNotes((prev) =>
+        prev.map((n) => (n.id === updated.id ? updated : n))
+      );
+  
+    } catch (err) {
+      console.error(err);
+      alert("添付ファイルの削除に失敗しました。");
+    }
   };
 
   // タグ追加
   const handleAddTag = async (noteId: number, tagName: string) => {
+
     if (!tagName.trim()) return;
+
+/*
     try {
       const updatedTags = await addTag(token!, noteId, tagName.trim());
 
@@ -408,11 +589,33 @@ export default function App() {
         alert("タグの追加に失敗しました。");
       }
     }
+*/
+
+    try {
+      const updatedTags = await withAuthRetry((token) =>
+        addTag(token, noteId, tagName.trim())
+      );
+  
+      setTags(updatedTags || []);
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === noteId ? { ...n, tags: updatedTags } : n
+        )
+      );
+  
+      // タグ一覧も更新
+      await fetchTags();
+  
+    } catch (err) {
+      console.error(err);
+      alert("タグの追加に失敗しました。");
+    }
   };
   
   // タグ削除
   const handleRemoveTag = async (noteId: number, tagName: string) => {
 
+/*
     try {
       const updatedTags = await removeTag(token!, noteId, tagName);
 
@@ -430,10 +633,30 @@ export default function App() {
         alert("タグの削除に失敗しました。");
       }
     }
+*/
+
+    try {
+      const updatedTags = await withAuthRetry((token) =>
+        removeTag(token, noteId, tagName)
+      );
+  
+      setTags(updatedTags || []);
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === noteId ? { ...n, tags: updatedTags } : n
+        )
+      );
+  
+    } catch (err) {
+      console.error(err);
+      alert("タグの削除に失敗しました。");
+    }
   };
 
   // Star（is_important）のトグル
   const handleToggleStar = async (noteId: number) => {
+
+/*
     try {
       const newValue = await toggleStar(token!, noteId);
   
@@ -458,6 +681,29 @@ export default function App() {
         alert("スター更新に失敗しました。");
       }
     }
+*/
+
+    try {
+      const newValue = await withAuthRetry((token) =>
+        toggleStar(token, noteId)
+      );
+  
+      // notes 一覧の該当ノートだけ更新
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === noteId ? { ...n, is_important: newValue } : n
+        )
+      );
+  
+      // 選択中ノートも更新
+      if (selected && selected.id === noteId) {
+        setSelected({ ...selected, is_important: newValue });
+      }
+  
+    } catch (err) {
+      console.error(err);
+      alert("スター更新に失敗しました。");
+    }
   };
 
   // インポート
@@ -465,7 +711,8 @@ export default function App() {
 
     const file = e.target.files?.[0];
     if (!file) return;
-  
+ 
+/* 
     try {
       const result = await importNotes(token!, file);
       alert(result.message);
@@ -481,10 +728,30 @@ export default function App() {
     } finally {
       e.target.value = "";
     }
+*/
+
+    try {
+      const result = await withAuthRetry((token) =>
+        importNotes(token, file)
+      );
+  
+      alert(result.message);
+  
+      // インポート後に一覧更新
+      await fetchNotes();
+  
+    } catch (err) {
+      console.error(err);
+      alert("Import failed.");
+    } finally {
+      e.target.value = "";
+    }
   };
 
   // エクスポート
   const handleExport = async () => {
+
+/*
     try {
       const blob = await exportNotes(token!);
       const url = window.URL.createObjectURL(blob);
@@ -503,6 +770,26 @@ export default function App() {
         console.error(err);
         alert("エクスポートに失敗しました。");
       }
+    }
+*/
+
+    try {
+      const blob = await withAuthRetry((token) =>
+        exportNotes(token)
+      );
+  
+      const url = window.URL.createObjectURL(blob);
+  
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `simplynotes_export_${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+  
+      window.URL.revokeObjectURL(url);
+  
+    } catch (err) {
+      console.error(err);
+      alert("エクスポートに失敗しました。");
     }
   };
 
