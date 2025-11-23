@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Response, Depends, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Request, Response, Depends, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
@@ -322,8 +322,12 @@ def normalize_newlines(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 @app.delete("/notes/{note_id}")
-def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
-
+## def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
+def delete_note(
+    note_id: int,
+    token: str = Depends(oauth2_scheme),
+    background: BackgroundTasks = None
+):
     conn = get_connection()
     cur = conn.cursor()
 
@@ -336,22 +340,20 @@ def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
         conn.close()
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # 添付ファイルパス
     cur.execute("SELECT filename_stored FROM attachments WHERE note_id=?", (note_id,))
     files = [row[0] for row in cur.fetchall()]
 
-    # 添付ファイルのDBレコード
     cur.execute("DELETE FROM attachments WHERE note_id=?", (note_id,))
-
     cur.execute("DELETE FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
     deleted = cur.rowcount
-
-    run_maintenance(user_id=user_id)
 
     conn.commit()
     conn.close()
 
-    store_dir = config["upload"]["dir"]
+#    run_maintenance(user_id=user_id)
+
+    if background is not None:
+        background.add_task(run_maintenance, user_id)
 
     # 実ファイル削除
     for filename in files:
