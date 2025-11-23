@@ -559,12 +559,30 @@ def get_all_tags(token: str = Depends(oauth2_scheme)):
     current_user = get_current_user(token)
     user_id = current_user["id"]
 
+##    cur.execute("""
+##        SELECT t.name, COUNT(nt.note_id) AS note_count
+##        FROM tags t
+##        JOIN note_tags nt ON t.id = nt.tag_id
+##        JOIN notes n ON nt.note_id = n.id
+##        WHERE n.user_id = ?
+##        GROUP BY t.id
+##        ORDER BY t.name COLLATE NOCASE
+##    """, (user_id,))
+
+    # ノート数にtrashタグを持つノートを含めない
     cur.execute("""
-        SELECT t.name, COUNT(nt.note_id) AS note_count
+        SELECT t.name,
+               COUNT(nt.note_id) AS note_count
         FROM tags t
         JOIN note_tags nt ON t.id = nt.tag_id
         JOIN notes n ON nt.note_id = n.id
         WHERE n.user_id = ?
+          AND nt.note_id NOT IN (
+              SELECT nt2.note_id
+              FROM note_tags nt2
+              JOIN tags t2 ON nt2.tag_id = t2.id
+              WHERE LOWER(t2.name) = 'trash'
+          )
         GROUP BY t.id
         ORDER BY t.name COLLATE NOCASE
     """, (user_id,))
@@ -787,7 +805,6 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
                         with open(stored_path, "wb") as f:
                             f.write(data)
 
-#                        uploaded_at = datetime.now().isoformat()
                         uploaded_at = datetime.now(timezone.utc).isoformat() 
 
                         cur.execute(

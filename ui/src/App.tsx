@@ -53,6 +53,7 @@ export default function App() {
 
     if (!q) return true;
 
+    /*
     // テキスト条件
     const textPart = q.replace(/#[^\s#]+/g, "").trim();
 
@@ -71,6 +72,27 @@ export default function App() {
       tagsInQuery.every(tag =>
         note.tags?.some(t => t.toLowerCase() === tag)
       );
+    */
+
+    // タグ抽出（#tag）— より堅牢
+    const tagsInQuery = [...q.matchAll(/#([^\s#]+)/g)].map(m => m[1]);
+  
+    // テキスト部分を除去
+    const textPart = q.replace(/#([^\s#]+)/g, "").trim();
+  
+    // テキスト一致
+    const matchText =
+      textPart === "" ||
+      note.title.toLowerCase().includes(textPart) ||
+      note.content.toLowerCase().includes(textPart);
+  
+    // タグ一致（すべてのタグを含む）
+    const matchTags =
+      tagsInQuery.length === 0 ||
+      tagsInQuery.every(tag =>
+        note.tags?.some(t => t.toLowerCase() === tag)
+      );
+
 
     // 両方をANDで評価
     return matchTags && matchText;
@@ -265,28 +287,8 @@ export default function App() {
     }
   }
 
-//  const token = localStorage.getItem("token");
-
   // ノート一覧取得
   const fetchNotes = async () => {
-
-/*
-    try {
-      const data = await getNotes(token!);
-      setNotes(data);
-      if (data.length > 0) {
-        const first = data[0];
-        setSelected(first);
-      }
-    } catch (err: any) {
-      if (err.message === "unauthorized") {
-        localStorage.removeItem("token");
-        window.location.href = loginUrl;
-      } else {
-        console.error(err);
-      }
-    }
-*/
 
     try {
       const data = await withAuthRetry((token) =>
@@ -294,12 +296,6 @@ export default function App() {
       );
   
       setNotes(data);
-
-      /* 
-      if (data.length > 0) {
-        setSelected(data[0]);
-      }
-      */
 
       const currentId = selected?.id;
 
@@ -329,26 +325,7 @@ export default function App() {
 
   // タグ一覧を取得
   const fetchTags = async () => {
-/*
-    try {
-      const data = await getAllTags(token!);
-      // data は [{ name: "仕事", note_count: 3 }, ...]
 
-      // Trash を除外（大文字・小文字を無視）
-      const filtered = data.filter(tag => tag.name.toLowerCase() !== "trash");
-
-      setAllTags(filtered);
-
-    } catch (err: any) {
-      if (err.message === "unauthorized") {
-        localStorage.removeItem("token");
-        window.location.href = loginUrl;
-      } else {
-        console.error(err);
-        alert("タグ一覧の取得に失敗しました。");
-      }
-    }
-*/
     try {
       const data = await withAuthRetry((token) => getAllTags(token));
   
@@ -374,30 +351,6 @@ export default function App() {
   const handleSave = async () => {
 
     if (!selected) return;
-
-/*    
-    try {
-
-      const updated = await saveNote( token!, selected, content );
-  
-      setSelected(updated);
-      setNotes((prev) =>
-        prev.map((n) => (n.id === updated.id ? updated : n))
-      );
-
-      // ✅ 手動保存完了 → 未保存フラグを解除
-      setUnsavedNoteIds((prev) => prev.filter((id) => id !== updated.id));
-
-    } catch (err: any) {
-      if (err.message === "unauthorized") {
-        localStorage.removeItem("token");
-        window.location.href = loginUrl;
-      } else {
-        console.error(err);
-        alert("保存に失敗しました。");
-      }
-    }
-*/
 
     try {
       const updated = await withAuthRetry((token) =>
@@ -435,24 +388,6 @@ export default function App() {
     if (!selected || !selected.id) return;
     if (!confirm("このノートを削除しますか？")) return;
 
-/*
-    try {
-      await deleteNote(token!, selected.id);
-      setNotes((prev) => prev.filter((n) => n.id !== selected.id));
-      setSelected(null);
-
-    } catch (err: any) {
-      if (err.message === "unauthorized") {
-        localStorage.removeItem("token");
-        window.location.href = loginUrl;
-      } else {
-        console.error(err);
-        alert("削除に失敗しました。");
-      }
-    }
-*/
-
-
     try {
       await withAuthRetry((token) => deleteNote(token, selected.id));
   
@@ -469,30 +404,6 @@ export default function App() {
   const handleSaveAttachment = async () => {
 
     if (!selected?.id || draftFiles.length === 0) return;
-
-/*
-    try {
-
-      const updated = await saveAttachments( token!, selected.id, draftFiles);
-      
-      setDraftFiles([]);
-      setAttachments(updated.files || []);
-
-      // 更新
-      setNotes((prev) =>
-        prev.map((n) => (n.id === updated.id ? updated : n))
-      );
-
-    } catch (err: any) {
-      if (err.message === "unauthorized") {
-        localStorage.removeItem("token");
-        window.location.href = loginUrl;
-      } else {
-        console.error(err);
-        alert("保存に失敗しました。");
-      }
-    }
-*/
 
     try {
       const updated = await withAuthRetry((token) =>
@@ -519,31 +430,6 @@ export default function App() {
     if (!selected) return;
     if (!confirm(`「${filename}」を削除しますか？`)) return;
 
-/*
-    try {
-
-      const updated = await removeAttachment(token!, selected.id, attachmentId);
-
-      setDraftFiles([]);
-      setAttachments(updated.files || []);
-
-      // 更新
-      setNotes((prev) =>
-        prev.map((n) => (n.id === updated.id ? updated : n))
-      );
-
-    } catch (err: any) {
-      if (err.message === "unauthorized") {
-        localStorage.removeItem("token");
-        window.location.href = loginUrl;
-      } else {
-        console.error(err);
-        alert("添付ファイルの削除に失敗しました。");
-      }
-    }
-*/
-
-
     try {
       const updated = await withAuthRetry((token) =>
         removeAttachment(token, selected.id, attachmentId)
@@ -567,29 +453,6 @@ export default function App() {
   const handleAddTag = async (noteId: number, tagName: string) => {
 
     if (!tagName.trim()) return;
-
-/*
-    try {
-      const updatedTags = await addTag(token!, noteId, tagName.trim());
-
-      setTags(updatedTags || []);
-      setNotes((prev) =>
-        prev.map((n) => (n.id === noteId ? { ...n, tags: updatedTags } : n))
-      );
-
-      // タグ一覧の再取得
-      await fetchTags();
-
-    } catch (err: any) {
-      if (err.message === "unauthorized") {
-        localStorage.removeItem("token");
-        window.location.href = loginUrl;
-      } else {
-        console.error(err);
-        alert("タグの追加に失敗しました。");
-      }
-    }
-*/
 
     try {
       const updatedTags = await withAuthRetry((token) =>
@@ -615,26 +478,6 @@ export default function App() {
   // タグ削除
   const handleRemoveTag = async (noteId: number, tagName: string) => {
 
-/*
-    try {
-      const updatedTags = await removeTag(token!, noteId, tagName);
-
-      setTags(updatedTags || []);
-      setNotes((prev) =>
-        prev.map((n) => (n.id === noteId ? { ...n, tags: updatedTags } : n))
-      );
-
-    } catch (err: any) {
-      if (err.message === "unauthorized") {
-        localStorage.removeItem("token");
-        window.location.href = loginUrl;
-      } else {
-        console.error(err);
-        alert("タグの削除に失敗しました。");
-      }
-    }
-*/
-
     try {
       const updatedTags = await withAuthRetry((token) =>
         removeTag(token, noteId, tagName)
@@ -655,33 +498,6 @@ export default function App() {
 
   // Star（is_important）のトグル
   const handleToggleStar = async (noteId: number) => {
-
-/*
-    try {
-      const newValue = await toggleStar(token!, noteId);
-  
-      // notes 一覧の該当ノートだけ更新
-      setNotes((prev) =>
-        prev.map((n) =>
-          n.id === noteId ? { ...n, is_important: newValue } : n
-        )
-      );
-  
-      // noteDetail（詳細表示中）も更新しているならここにも反映
-      if (selected && selected.id === noteId) {
-        setSelected({ ...selected, is_important: newValue });
-      }
-  
-    } catch (err: any) {
-      if (err.message === "unauthorized") {
-        localStorage.removeItem("token");
-        window.location.href = loginUrl;
-      } else {
-        console.error(err);
-        alert("スター更新に失敗しました。");
-      }
-    }
-*/
 
     try {
       const newValue = await withAuthRetry((token) =>
@@ -712,24 +528,6 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
  
-/* 
-    try {
-      const result = await importNotes(token!, file);
-      alert(result.message);
-      await fetchNotes(); // インポート後に一覧更新
-    } catch (err: any) {
-      if (err.message === "unauthorized") {
-        localStorage.removeItem("token");
-        window.location.href = loginUrl;
-      } else {
-        console.error(err);
-        alert("Import failed.");
-      }
-    } finally {
-      e.target.value = "";
-    }
-*/
-
     try {
       const result = await withAuthRetry((token) =>
         importNotes(token, file)
@@ -751,28 +549,6 @@ export default function App() {
   // エクスポート
   const handleExport = async () => {
 
-/*
-    try {
-      const blob = await exportNotes(token!);
-      const url = window.URL.createObjectURL(blob);
-  
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `simplynotes_export_${new Date().toISOString().slice(0, 10)}.zip`;
-      a.click();
-  
-      window.URL.revokeObjectURL(url);
-    } catch (err: any) {
-      if (err.message === "unauthorized") {
-        localStorage.removeItem("token");
-        window.location.href = loginUrl;
-      } else {
-        console.error(err);
-        alert("エクスポートに失敗しました。");
-      }
-    }
-*/
-
     try {
       const blob = await withAuthRetry((token) =>
         exportNotes(token)
@@ -793,7 +569,6 @@ export default function App() {
     }
   };
 
-
   // ログアウト
   const handleLogout = () => {
     localStorage.removeItem("token"); // トークン削除
@@ -803,13 +578,6 @@ export default function App() {
   // ------------------------------------------------------------
   // 初回処理
   // ------------------------------------------------------------
-
-  /*
-  useEffect(() => {
-    fetchNotes();
-    fetchTags();
-  }, []);
-  */
 
   useEffect(() => {
   
@@ -868,6 +636,7 @@ export default function App() {
   // ------------------------------------------------------------
   // UI 表示
   // ------------------------------------------------------------
+
   return (
     <div className="h-screen flex text-gray-800">
 
@@ -929,20 +698,6 @@ export default function App() {
           {showMenu && (
             <div className="absolute top-12 left-3 bg-white border border-gray-200 rounded-lg shadow-lg z-10 
                             transition-all duration-150 transform origin-top" >
-
-              {/*
-              <button
-                className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-                onClick={() => {
-                  fetchNotes();
-                  fetchTags();
-                  setShowMenu(false);
-                }}>
-                🔄 Refresh View
-              </button>
-
-              <div className="border-t border-gray-200 my-1"></div>
-              */}
 
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-gray-100"
@@ -1107,8 +862,6 @@ export default function App() {
           ))}
   
         </div>
-
-        {/* フッター */}
 
         <div className="p-3 border-t mt-auto flex justify-between items-center min-h-[58px]">
 
