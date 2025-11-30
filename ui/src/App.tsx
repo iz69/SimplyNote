@@ -53,27 +53,6 @@ export default function App() {
 
     if (!q) return true;
 
-    /*
-    // テキスト条件
-    const textPart = q.replace(/#[^\s#]+/g, "").trim();
-
-    // テキスト条件：タイトル or 本文に含まれる
-    const matchText =
-      textPart === "" ||
-      note.title.toLowerCase().includes(textPart) ||
-      note.content.toLowerCase().includes(textPart);
-
-    // タグ条件
-    const tagsInQuery = q.match(/#[^\s#]+/g)?.map(t => t.slice(1)) ?? [];
-
-    // タグ条件：すべてのタグを含むノートのみ
-    const matchTags =
-      tagsInQuery.length === 0 ||
-      tagsInQuery.every(tag =>
-        note.tags?.some(t => t.toLowerCase() === tag)
-      );
-    */
-
     // タグ抽出（#tag）— より堅牢
     const tagsInQuery = [...q.matchAll(/#([^\s#]+)/g)].map(m => m[1]);
   
@@ -637,6 +616,18 @@ export default function App() {
   // UI 表示
   // ------------------------------------------------------------
 
+  const tagColorClass = (tag: string) => {
+
+    const t = tag.toLowerCase();
+
+    if (t === 'memo' )  return 'bg-yellow-200 text-yellow-800';
+    if (t === 'work')  return 'bg-blue-200 text-blue-800';
+    if (t === 'idea' )  return 'bg-green-200 text-green-800';
+    if (t === 'trash') return 'bg-red-200 text-red-800';
+ 
+    return 'bg-blue-100 text-blue-600';
+  };
+
   return (
     <div className="h-screen flex text-gray-800">
 
@@ -819,8 +810,7 @@ export default function App() {
                   {note.tags?.map((tag) => (
                     <span
                       key={tag}
-                      className="text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded"
-                    >
+                      className={`text-xs px-1.5 py-0.5 rounded ${tagColorClass(tag)}`} >
                       {tag}
                     </span>
                   ))}
@@ -994,7 +984,7 @@ export default function App() {
               {tags.map((tag) => (
                 <span
                   key={tag}
-                  className="relative inline-flex items-center px-2 py-1 bg-gray-200 rounded text-sm mr-2" >
+                  className={`relative inline-flex items-center px-2 py-1 rounded text-sm mr-2 ${tagColorClass(tag)}`} >
                   #{tag}
 
                   <button
