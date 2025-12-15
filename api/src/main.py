@@ -637,11 +637,9 @@ def toggle_important(note_id: int, token: str = Depends(oauth2_scheme)):
     # 更新
     cur.execute( """
         UPDATE notes
-        SET is_important = ?,
-            updated_at   = ?
-        WHERE id = ?
-          AND user_id = ?
-    """, (new_flag, now, note_id, user_id),)
+        SET is_important = ?
+        WHERE id = ? AND user_id = ?
+    """, (new_flag, note_id, user_id),)
 
     conn.commit()
     conn.close()
