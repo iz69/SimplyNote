@@ -34,6 +34,10 @@ https://github.com/iz69/SimplyNote_vim<br/>
 ### Flutter Apps (Android)
 <img src="https://github.com/user-attachments/assets/1dae6e88-be43-4697-9513-c0b023164bcc" width="300" alt="SimplyNote_Android" />
 
+<a href="https://play.google.com/store/apps/details?id=com.kuromaru_fx.simplynote">
+<img width="239" height="71" alt="GetItOnGooglePlay_Badge_Web_color_Japanese" src="https://github.com/user-attachments/assets/49ebb2ad-8f90-4bd0-a27e-2834ed93b159" />
+</a>
+
 ---
 
 ### License
