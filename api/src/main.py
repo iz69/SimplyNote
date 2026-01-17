@@ -321,8 +321,9 @@ def update_note(
 def normalize_newlines(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
+# -----------------------------------------------------------------------
+
 @app.delete("/notes/{note_id}")
-## def delete_note(note_id: int, token: str = Depends(oauth2_scheme)):
 def delete_note(
     note_id: int,
     token: str = Depends(oauth2_scheme),
@@ -335,30 +336,19 @@ def delete_note(
     user_id = current_user["id"]
 
     cur.execute("SELECT id FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
-    row = cur.fetchone()
-    if not row:
+    if not cur.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="Note not found")
 
-    cur.execute("SELECT filename_stored FROM attachments WHERE note_id=?", (note_id,))
-    files = [row[0] for row in cur.fetchall()]
-
-    cur.execute("DELETE FROM attachments WHERE note_id=?", (note_id,))
-    cur.execute("DELETE FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
-    deleted = cur.rowcount
-
-    conn.commit()
+    deleted, files = _delete_notes_and_attachments(conn, cur, user_id, [note_id])
     conn.close()
-
-#    run_maintenance(user_id=user_id)
 
     if background is not None:
         background.add_task(run_maintenance, user_id)
 
-    # 実ファイル削除
     for filename in files:
+        path = os.path.join(config["upload"]["dir"], filename)
         try:
-            path = os.path.join(config["upload"]["dir"], filename)
             if os.path.exists(path):
                 os.remove(path)
         except Exception as e:
@@ -368,6 +358,73 @@ def delete_note(
         raise HTTPException(status_code=404, detail="Note not found")
 
     return {"detail": "Note and attachments deleted"}
+
+
+# ゴミ箱を空にする
+@app.delete("/trash")
+def empty_trash(
+    token: str = Depends(oauth2_scheme),
+    background: BackgroundTasks = None
+):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    current_user = get_current_user(token)
+    user_id = current_user["id"]
+
+    # trash タグに紐づく note_id を列挙（ユーザー制約付き）
+    cur.execute("""
+        SELECT DISTINCT n.id
+        FROM notes n
+        JOIN note_tags nt ON nt.note_id = n.id
+        JOIN tags t ON t.id = nt.tag_id
+        WHERE n.user_id = ? AND upper(t.name) = upper(?)
+    """, (user_id, "trash"))
+    note_ids = [row[0] for row in cur.fetchall()]
+
+    deleted, files = _delete_notes_and_attachments(conn, cur, user_id, note_ids)
+    conn.close()
+
+    if background is not None:
+        background.add_task(run_maintenance, user_id)
+
+    # 実ファイル削除
+    for filename in files:
+        path = os.path.join(config["upload"]["dir"], filename)
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except Exception as e:
+            print(f"⚠️ Failed to remove file {path}: {e}")
+
+    return {"detail": "Trash emptied", "deleted": deleted}
+
+def _delete_notes_and_attachments(conn, cur, user_id: int, note_ids: list[int]):
+    if not note_ids:
+        return 0, []
+
+    placeholders = ",".join(["?"] * len(note_ids))
+
+    # 実ファイル削除用に filename_stored を回収
+    cur.execute(
+        f"SELECT filename_stored FROM attachments WHERE note_id IN ({placeholders})",
+        note_ids,
+    )
+    files = [row[0] for row in cur.fetchall()]
+
+    # attachments -> notes の順で削除（あなたの既存方針に合わせる）
+    cur.execute(
+        f"DELETE FROM attachments WHERE note_id IN ({placeholders})",
+        note_ids,
+    )
+    cur.execute(
+        f"DELETE FROM notes WHERE user_id=? AND id IN ({placeholders})",
+        [user_id, *note_ids],
+    )
+    deleted = cur.rowcount
+
+    conn.commit()
+    return deleted, files
 
 # -----------------------------------------------------------------------
 
@@ -560,16 +617,6 @@ def get_all_tags(token: str = Depends(oauth2_scheme)):
 
     current_user = get_current_user(token)
     user_id = current_user["id"]
-
-##    cur.execute("""
-##        SELECT t.name, COUNT(nt.note_id) AS note_count
-##        FROM tags t
-##        JOIN note_tags nt ON t.id = nt.tag_id
-##        JOIN notes n ON nt.note_id = n.id
-##        WHERE n.user_id = ?
-##        GROUP BY t.id
-##        ORDER BY t.name COLLATE NOCASE
-##    """, (user_id,))
 
     # ノート数にtrashタグを持つノートを含めない
     cur.execute("""

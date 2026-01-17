@@ -119,6 +119,7 @@ def get_connection():
 
         conn = sqlite3.connect(db_path, timeout=10.0, check_same_thread=False)
         conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA foreign_keys=ON;")
         conn.row_factory = sqlite3.Row  # 辞書形式で取得
 
         return conn
