@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from .database import get_connection
@@ -10,7 +10,7 @@ router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
-SECRET_KEY = "simplynote-secret"
+SECRET_KEY = os.getenv("NOTE_SECRET_KEY", "simplynote-secret") 
 ALGORITHM = "HS256"
 
 EXPIRE_ACCESS_TOKEN_MINUTES = int( os.getenv("EXPIRE_ACCESS_TOKEN_MINUTES", "60") )
@@ -32,7 +32,6 @@ def init_users(users):
     to_delete = [u for u in existing_users if u[1] == "user" and u[0] not in keep_usernames]
     for username, _ in to_delete:
         cur.execute("DELETE FROM users WHERE username=?", (username,))
-        logger.info(f"🗑️ Deleted user: {username}")
 
     # users に載っているが DB に存在しないユーザを追加
     for u in users:
@@ -49,7 +48,8 @@ def init_users(users):
 
         cur.execute(
             "INSERT INTO users (username, password, role, created_at) VALUES (?, ?, ?, ?)",
-            (username, hash_password(password), role, datetime.utcnow().isoformat()),
+#            (username, hash_password(password), role, datetime.utcnow().isoformat()),
+            (username, hash_password(password), role, datetime.now(timezone.utc).isoformat() ),
         )
 
     conn.commit()
@@ -99,7 +99,8 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
 def create_access_token(data: dict, expires_delta: timedelta):
     to_encode = data.copy()
-    expire = datetime.utcnow() + expires_delta
+#    expire = datetime.utcnow() + expires_delta
+    expire = datetime.now(timezone.utc) + expires_delta
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -148,7 +149,8 @@ def refresh_token( payload: dict ):
 
     new_access_token = create_access_token(
         {"sub": username},
-        expires_delta=timedelta(minutes=EXPIRE_REFRESH_TOKEN_DAYS)
+#        expires_delta=timedelta(minutes=EXPIRE_REFRESH_TOKEN_DAYS)     # bug
+        expires_delta=timedelta(minutes=EXPIRE_ACCESS_TOKEN_MINUTES)
     )
 
     return {"access_token": new_access_token, "token_type": "bearer"}

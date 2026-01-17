@@ -13,6 +13,7 @@ services:
       ADMIN_USER: admin
       ADMIN_PASS: password
       BASE_PATH: /simplynote-api
+      NOTE_SECRET_KEY: simplynote-secret
       EXPIRE_ACCESS_TOKEN_MINUTES: 60
       EXPIRE_REFRESH_TOKEN_DAYS: 30
 
