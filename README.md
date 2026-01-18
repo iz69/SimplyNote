@@ -1,5 +1,5 @@
 自鯖にsimplenoteぽいのを入れたくて自分用に作ったもの<br/>
-気が向いたときに更新
+気が向いたときに更新。永遠に開発中。
 
 - debian + nginx (proxy_pass)
 - docker
