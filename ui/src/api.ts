@@ -268,7 +268,7 @@ export async function removeAttachment(
   attachmentId: number
 ): Promise<Note> {
 
-  await deleteAttachment( token!, attachmentId );
+  await deleteAttachment(token, attachmentId);
 
   // ノートを再取得して返す
   const refreshed = await getNoteDetail(token, noteId);

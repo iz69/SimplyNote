@@ -4,6 +4,11 @@ CONFIG_PATH = "/data/config.json"
 
 DEFAULT_CONFIG = {
 
+    "auth": {
+        "secret_key": "simplynote-secret",
+        "expire_access_token_minutes": 60,
+        "expire_refresh_token_days": 30
+    },
     "database": {
         "type": "sqlite",                # 将来 "postgres", "mysql" などに変更可能
         "path": "/data/simplynote.db"

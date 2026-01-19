@@ -1,7 +1,5 @@
 import { useEffect, useState, useRef } from "react";
 import { FilePlus, RefreshCcw, Clock } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { refreshAccessToken } from "./api";
 import type { Note, Tag, Attachment } from "./api";
 import { getNotes, createNote, updateNote, deleteNote, saveNote } from "./api";
@@ -75,12 +73,18 @@ export default function App() {
 
     // 両方をANDで評価
     return matchTags && matchText;
+  }).sort((a, b) => {
+    // is_important DESC, updated_at DESC
+    if ((a.is_important ?? 0) !== (b.is_important ?? 0)) {
+      return (b.is_important ?? 0) - (a.is_important ?? 0);
+    }
+    return new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime();
   });
 
   // 表示リストが変わったら、先頭のノートを自動選択
   useEffect(() => {
 
-    if (isCreating) return; 
+    if (isCreating) return;
 
     if (filteredNotes.length === 0) {
       setSelected(null);
@@ -92,7 +96,7 @@ export default function App() {
     if (!exists) {
       setSelected(filteredNotes[0]);
     }
-  }, [filteredNotes]);
+  }, [filteredNotes, isCreating]);
   
   // 選択ノートが変わったら表示を更新
   useEffect(() => {
@@ -141,20 +145,26 @@ export default function App() {
   }
 
   useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let isMounted = true;
+
     async function scheduleRefresh() {
       const token = localStorage.getItem("token");
       if (!token) return;
-  
+
       const ms = msUntilExpiry(token);
       if (ms == null) return;
-  
+
       // 有効期限の1分前を狙ってリフレッシュ
       const ahead = Math.max(5000, ms - 60_000);
-  
-      setTimeout(async () => {
+
+      timeoutId = setTimeout(async () => {
+        if (!isMounted) return;
         try {
           await refreshAccessToken();
-          scheduleRefresh();  // 更新後も次のスケジュールを再設定
+          if (isMounted) {
+            scheduleRefresh();  // 更新後も次のスケジュールを再設定
+          }
         } catch (err) {
           console.error("Token refresh failed", err);
           localStorage.removeItem("token");
@@ -163,8 +173,13 @@ export default function App() {
         }
       }, ahead);
     }
-  
+
     scheduleRefresh();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   // --------------------
@@ -206,12 +221,12 @@ export default function App() {
           );
   
           setNotes((prev) =>
-            prev.map((n) => (n.id === updated.id ? updated : n))
+            prev.map((n) => (n.id === updated.id ? { ...n, ...updated, created_at: n.created_at } : n))
           );
 
           // これ入れるとキャレットが飛ぶ
 //          setSelected(updated);
-  
+
           setUnsavedNoteIds((prev) => prev.filter((id) => id !== updated.id));
   
         } else if (value.trim() !== "") {
@@ -327,18 +342,19 @@ export default function App() {
   };
  
   // 保存
-  const handleSave = async () => {
+  const handleSave = async (overrideTitle?: string) => {
 
     if (!selected) return;
 
     try {
+      const titleToSave = overrideTitle ?? title;
       const updated = await withAuthRetry((token) =>
-        saveNote(token, selected, content)
+        saveNote(token, { ...selected, title: titleToSave }, content)
       );
   
       setSelected(updated);
       setNotes((prev) =>
-        prev.map((n) => (n.id === updated.id ? updated : n))
+        prev.map((n) => (n.id === updated.id ? { ...n, ...updated, created_at: n.created_at } : n))
       );
   
       // 手動保存 → 未保存フラグクリア
@@ -394,7 +410,7 @@ export default function App() {
   
       // ノート一覧も更新
       setNotes((prev) =>
-        prev.map((n) => (n.id === updated.id ? updated : n))
+        prev.map((n) => (n.id === updated.id ? { ...n, ...updated, created_at: n.created_at } : n))
       );
   
     } catch (err) {
@@ -419,7 +435,7 @@ export default function App() {
   
       // ノート一覧更新
       setNotes((prev) =>
-        prev.map((n) => (n.id === updated.id ? updated : n))
+        prev.map((n) => (n.id === updated.id ? { ...n, ...updated, created_at: n.created_at } : n))
       );
   
     } catch (err) {
@@ -872,7 +888,7 @@ export default function App() {
               showTrashOnly ? "bg-red-500 text-white" : "bg-gray-200 hover:bg-gray-300"
             }`}
           >
-            🗑 Trash
+            🗑 Trash Box
           </button>
         </div>
 
@@ -897,9 +913,9 @@ export default function App() {
                 const value = e.currentTarget.value
                 setTitle(value)
                 if (selected) {
-                  selected.title = value
+                  setSelected({ ...selected, title: value });
                 }
-                handleSave()
+                handleSave(value)
               }}
               autoFocus
             />
@@ -1105,13 +1121,28 @@ export default function App() {
         </div>
 
         {/* フッター */}
-        <div className="p-3 border-t flex justify-end items-center space-x-3 min-h-[58px]">
+        <div className="p-3 border-t flex justify-between items-center min-h-[58px]">
 
-          {!unsavedNoteIds.includes(selected?.id ?? "") ? (
+          {/* 左：作成日時・更新日時 */}
+          <div className="text-sm text-gray-500">
+            {selected && (() => {
+              const currentNote = notes.find(n => n.id === selected.id);
+              return (
+                <>
+                  <span>Created: {currentNote?.created_at ? new Date(currentNote.created_at).toLocaleString() : "-"}</span>
+                  <span className="mx-3">|</span>
+                  <span>Updated: {currentNote?.updated_at ? new Date(currentNote.updated_at).toLocaleString() : "-"}</span>
+                </>
+              );
+            })()}
+          </div>
+
+          {/* 右：Saveボタン */}
+          {!unsavedNoteIds.includes(selected?.id ?? -1) ? (
             <div className="px-3 py-1"> </div>
           ) : (
             <button
-              onClick={handleSave}
+              onClick={() => handleSave()}
               className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
               💾 Save
             </button>

@@ -5,17 +5,14 @@ services:
     restart: always
     ports:
       - "18888:8000"
-##    build: ./api                           # for Dev
-##    volumes:                               # for Dev
-##      - ./api/data:/data                   # for Dev
+##    build: ./api                           # comment for Dev
+##    volumes:                               # comment for Dev
+##      - ./api/data:/data                   # comment for Dev
     environment:
       TZ: Asia/Tokyo
       ADMIN_USER: admin
       ADMIN_PASS: password
       BASE_PATH: /simplynote-api
-      NOTE_SECRET_KEY: simplynote-secret
-      EXPIRE_ACCESS_TOKEN_MINUTES: 60
-      EXPIRE_REFRESH_TOKEN_DAYS: 30
 
     # ----------------------------------------------------------
     # for Develop
@@ -39,7 +36,7 @@ services:
       - "15173:5173"
     depends_on:
       - simplynote-api
-##    build: ./ui                            # for Dev
+##    build: ./ui                            # comment for Dev
 
     # ----------------------------------------------------------
     # for Develop

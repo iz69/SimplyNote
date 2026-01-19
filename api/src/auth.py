@@ -4,17 +4,19 @@ from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from .database import get_connection
-import os
+from .config import load_config
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
-SECRET_KEY = os.getenv("NOTE_SECRET_KEY", "simplynote-secret") 
+_config = load_config()
+_auth_config = _config.get("auth", {})
+SECRET_KEY = _auth_config.get("secret_key", "simplynote-secret")
 ALGORITHM = "HS256"
 
-EXPIRE_ACCESS_TOKEN_MINUTES = int( os.getenv("EXPIRE_ACCESS_TOKEN_MINUTES", "60") )
-EXPIRE_REFRESH_TOKEN_DAYS = int( os.getenv("EXPIRE_REFRESH_TOKEN_DAYS", "30") )
+EXPIRE_ACCESS_TOKEN_MINUTES = _auth_config.get("expire_access_token_minutes", 60)
+EXPIRE_REFRESH_TOKEN_DAYS = _auth_config.get("expire_refresh_token_days", 30)
 
 def init_users(users):
 
