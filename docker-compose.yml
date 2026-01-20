@@ -34,9 +34,9 @@ services:
     restart: always
     ports:
       - "15173:5173"
-    depends_on:
-      - simplynote-api
-##    build: ./ui                            # comment for Dev
+##    build: ./ui                                # comment for Dev
+##    volumes:
+##      - ./ui/config.json:/ui/dist/config.json  # comment for Dev
 
     # ----------------------------------------------------------
     # for Develop

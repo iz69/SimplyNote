@@ -1,15 +1,13 @@
 import { useEffect, useState, useRef } from "react";
-import { FilePlus, RefreshCcw, Clock } from "lucide-react";
-import { refreshAccessToken } from "./api";
-import type { Note, Tag, Attachment } from "./api";
-import { getNotes, createNote, updateNote, deleteNote, saveNote } from "./api";
-import { saveAttachments, removeAttachment, getAllTags, addTag, removeTag, toggleStar } from "./api";
-import { importNotes, exportNotes } from "./api";
-import { basePath, apiUrl } from "./utils"
+import { FilePlus, RefreshCcw, Clock, Trash2 } from "lucide-react";
+import { getDataSource, clearDataSource } from "./dataSource";
+import type { Note, Tag, Attachment } from "./dataSource";
+import { basePath } from "./utils"
 
 export default function App() {
 
   const loginUrl = basePath() + "/login";
+  const ds = getDataSource();
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [selected, setSelected] = useState<Note | null>(null);
@@ -35,6 +33,10 @@ export default function App() {
   const [showMenu, setShowMenu] = useState(false);
 
   const [unsavedNoteIds, setUnsavedNoteIds] = useState<number[]>([]);  // 未保存ノート
+  const [isLoading, setIsLoading] = useState(false);  // 読み込み中
+  const [isSavingNew, setIsSavingNew] = useState(false);  // 新規ノート保存中
+  const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);  // ゴミ箱削除中
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);  // アップロード進捗
 
   // フィルタ済みノート一覧を生成
   const filteredNotes = notes.filter((note) => {
@@ -42,10 +44,10 @@ export default function App() {
     const q = searchQuery.trim().toLowerCase();
 
     const isTrash = note.tags?.some(t => t.toLowerCase() === "trash");
-  
+
     // ゴミ箱モードなら Trash のみ表示
     if (showTrashOnly) return isTrash;
-  
+
     // 通常モードでは Trash を除外
     if (isTrash) return false;
 
@@ -53,16 +55,16 @@ export default function App() {
 
     // タグ抽出（#tag）— より堅牢
     const tagsInQuery = [...q.matchAll(/#([^\s#]+)/g)].map(m => m[1]);
-  
+
     // テキスト部分を除去
     const textPart = q.replace(/#([^\s#]+)/g, "").trim();
-  
+
     // テキスト一致
     const matchText =
       textPart === "" ||
       note.title.toLowerCase().includes(textPart) ||
       note.content.toLowerCase().includes(textPart);
-  
+
     // タグ一致（すべてのタグを含む）
     const matchTags =
       tagsInQuery.length === 0 ||
@@ -97,7 +99,7 @@ export default function App() {
       setSelected(filteredNotes[0]);
     }
   }, [filteredNotes, isCreating]);
-  
+
   // 選択ノートが変わったら表示を更新
   useEffect(() => {
 
@@ -109,7 +111,7 @@ export default function App() {
       setTags([]);
       return;
     }
-  
+
     setTitle(selected.title || "");
     setContent(selected.content);
     setAttachments(selected.files || []);
@@ -117,7 +119,7 @@ export default function App() {
     setTags(selected.tags || []);
 
   }, [selected]);
- 
+
   // --------------------
 
   const handleSelect = (note: Note) => {
@@ -138,13 +140,17 @@ export default function App() {
       return null;
     }
   }
-  
+
   function msUntilExpiry(token: string) {
     const expMs = parseJwtExp(token);
     return expMs ? expMs - Date.now() : null;
   }
 
   useEffect(() => {
+    // APIモードのみトークンリフレッシュをスケジュール
+    const backend = localStorage.getItem("backend") || "api";
+    if (backend !== "api") return;
+
     let timeoutId: ReturnType<typeof setTimeout>;
     let isMounted = true;
 
@@ -161,7 +167,7 @@ export default function App() {
       timeoutId = setTimeout(async () => {
         if (!isMounted) return;
         try {
-          await refreshAccessToken();
+          await ds.refreshAccessToken();
           if (isMounted) {
             scheduleRefresh();  // 更新後も次のスケジュールを再設定
           }
@@ -191,54 +197,67 @@ export default function App() {
 
     const value = e.target.value;
     setContent(value);
-  
+
     if (selected?.id) {
+      // 楽観的更新: ローカルのnotes配列を即座に更新
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === selected.id
+            ? { ...n, content: value, updated_at: new Date().toISOString() }
+            : n
+        )
+      );
+
       setUnsavedNoteIds((prev) =>
         prev.includes(selected.id) ? prev : [...prev, selected.id]
       );
     }
- 
+
     // 入力ごとにタイマーリセット
     if (saveTimer.current) clearTimeout(saveTimer.current);
-  
+
     saveTimer.current = window.setTimeout(async () => {
-  
+
       // ローカル token が消えていたら保存できない
-      if (!localStorage.getItem("token")) return;
-  
+      const backend = localStorage.getItem("backend") || "api";
+      const hasAuth = backend === "drive"
+        ? !!localStorage.getItem("drive_token")
+        : !!localStorage.getItem("token");
+      if (!hasAuth) return;
+
       // 内容が変わってなければ未保存フラグだけ外す
       if (selected && value === selected.content) {
         setUnsavedNoteIds((prev) => prev.filter((id) => id !== selected.id));
         return;
       }
-  
+
       try {
         if (selected) {
 
-          // 既存ノートの自動保存（401 なら refresh して再実行）
-          const updated = await withAuthRetry((token) =>
-            updateNote(token, selected.id, { title: selected.title, content: value })
-          );
-  
-          setNotes((prev) =>
-            prev.map((n) => (n.id === updated.id ? { ...n, ...updated, created_at: n.created_at } : n))
-          );
+          // バックグラウンドで保存（結果を待たずにUIは既に更新済み）
+          withAuthRetry(() =>
+            ds.updateNote(selected.id, { title: selected.title, content: value })
+          ).then(() => {
+            setUnsavedNoteIds((prev) => prev.filter((id) => id !== selected.id));
+          }).catch((err) => {
+            console.error("Auto save failed:", err);
+            // 保存失敗時も未保存マークは残す（ユーザーに再試行の機会を与える）
+          });
 
-          // これ入れるとキャレットが飛ぶ
-//          setSelected(updated);
-
-          setUnsavedNoteIds((prev) => prev.filter((id) => id !== updated.id));
-  
         } else if (value.trim() !== "") {
-          const title = value.split("\n")[0].slice(0, 30) || "New Note...";
-          const created = await withAuthRetry((token) =>
-            createNote(token, { title, content: value })
+          // Google Drive接続時は新規ノートの自動保存をしない（Save New Noteボタンで保存）
+          if (backend === "drive") return;
+
+          const newTitle = title.trim() || value.split("\n")[0].slice(0, 30) || "New Note...";
+          const created = await withAuthRetry(() =>
+            ds.createNote(newTitle, value)
           );
-  
+
           setNotes((prev) => [created, ...prev]);
           setSelected(created);
+          setIsCreating(false);  // 自動保存完了後も通常モードへ移行
         }
-  
+
       } catch (err) {
         console.error("Auto save failed:", err);
       }
@@ -248,72 +267,74 @@ export default function App() {
 
   // --------------------
 
-  async function withAuthRetry<T>(fn: (token: string) => Promise<T>): Promise<T> {
+  async function withAuthRetry<T>(fn: () => Promise<T>): Promise<T> {
 
-    let token = localStorage.getItem("token");
-  
-    if (!token) {
-      throw new Error("no-token");
-    }
-  
     try {
       // まず通常実行
-      return await fn(token);
+      return await fn();
     } catch (err: any) {
       if (err.message !== "unauthorized") {
         throw err;
       }
-  
+
       // 401 が来た → refresh を試す
+      const backend = localStorage.getItem("backend") || "api";
+
       try {
-        await refreshAccessToken();
+        await ds.refreshAccessToken();
       } catch {
         // refresh_token もダメ → 強制ログアウト
-        localStorage.removeItem("token");
-        localStorage.removeItem("refresh_token");
+        if (backend === "drive") {
+          localStorage.removeItem("drive_token");
+        } else {
+          localStorage.removeItem("token");
+          localStorage.removeItem("refresh_token");
+        }
+        localStorage.removeItem("backend");
+        clearDataSource();
         window.location.href = loginUrl;
         throw new Error("logout");
       }
-  
-      // 成功したら新しい token で再実行
-      token = localStorage.getItem("token")!;
-      return await fn(token);
+
+      // 成功したら再実行
+      return await fn();
     }
   }
 
   // ノート一覧取得
   const fetchNotes = async () => {
 
+    setIsLoading(true);
+
     try {
-      const data = await withAuthRetry((token) =>
-        getNotes(token)
-      );
-  
+      const data = await withAuthRetry(() => ds.getNotes());
+
       setNotes(data);
 
-      const currentId = selected?.id;
+      // 選択状態は現在の最新値を使って判定（非同期中の選択変更を尊重）
+      setSelected((currentSelected) => {
+        if (data.length === 0) {
+          return null;
+        }
 
-      if (data.length === 0) {
-        setSelected(null);
-        return;
-      }
+        // 現在選択中のノートが新データに存在すれば維持
+        const found = currentSelected
+          ? data.find(n => n.id === currentSelected.id)
+          : null;
 
-      // 同じ note がまだ存在する？
-      const found = currentId
-        ? data.find(n => n.id === currentId)
-        : null;
+        if (found) {
+          return found;
+        }
 
-      if (found) {
-        // そのまま維持
-        setSelected(found);
-      } else {
-        // 無くなっていた → 先頭にフォールバック
-        setSelected(data[0]);
-      }
-  
+        // 選択中ノートが削除されていた場合のみ先頭にフォールバック
+        return currentSelected ? data[0] : data[0];
+      });
+
     } catch (err) {
       console.error(err);
       alert("ノート一覧の取得に失敗しました。");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -321,13 +342,13 @@ export default function App() {
   const fetchTags = async () => {
 
     try {
-      const data = await withAuthRetry((token) => getAllTags(token));
-  
+      const data = await withAuthRetry(() => ds.getAllTags());
+
       // Trash を除外
       const filtered = data.filter(tag => tag.name.toLowerCase() !== "trash");
-  
+
       setAllTags(filtered);
-  
+
     } catch (err) {
       console.error(err);
       alert("タグ一覧の取得に失敗しました。");
@@ -340,32 +361,71 @@ export default function App() {
     setIsCreating(true);
     setSelected(null);
   };
- 
+
+  // 新規ノートを即座に保存
+  const handleSaveNewNote = async () => {
+
+    if (!content.trim() || isSavingNew) return;
+
+    // 自動保存タイマーをキャンセル（重複保存を防ぐ）
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+
+    const newTitle = title.trim() || content.split("\n")[0].slice(0, 30) || "New Note...";
+
+    setIsSavingNew(true);
+
+    try {
+      const created = await withAuthRetry(() =>
+        ds.createNote(newTitle, content)
+      );
+
+      setNotes((prev) => [created, ...prev]);
+      setSelected(created);
+      setIsCreating(false);
+
+    } catch (err) {
+      console.error("Failed to create note:", err);
+      alert("ノートの作成に失敗しました。");
+    } finally {
+      setIsSavingNew(false);
+    }
+  };
+
   // 保存
-  const handleSave = async (overrideTitle?: string) => {
+  const handleSave = (overrideTitle?: string) => {
 
     if (!selected) return;
 
-    try {
-      const titleToSave = overrideTitle ?? title;
-      const updated = await withAuthRetry((token) =>
-        saveNote(token, { ...selected, title: titleToSave }, content)
-      );
-  
-      setSelected(updated);
-      setNotes((prev) =>
-        prev.map((n) => (n.id === updated.id ? { ...n, ...updated, created_at: n.created_at } : n))
-      );
-  
-      // 手動保存 → 未保存フラグクリア
-      setUnsavedNoteIds((prev) => prev.filter((id) => id !== updated.id));
-  
-    } catch (err) {
-      console.error(err);
-      alert("保存に失敗しました。");
-    }
+    const titleToSave = overrideTitle ?? title;
+    const noteId = selected.id;
+
+    // 楽観的更新: UIを即座に更新
+    const optimisticNote = {
+      ...selected,
+      title: titleToSave,
+      content,
+      updated_at: new Date().toISOString(),
+    };
+
+    setSelected(optimisticNote);
+    setNotes((prev) =>
+      prev.map((n) => (n.id === noteId ? { ...n, ...optimisticNote, created_at: n.created_at } : n))
+    );
+    setUnsavedNoteIds((prev) => prev.filter((id) => id !== noteId));
+
+    // バックグラウンドで保存
+    withAuthRetry(() => ds.updateNote(noteId, { title: titleToSave, content }))
+      .catch((err) => {
+        console.error("Save failed:", err);
+        // 失敗時は未保存フラグを戻す
+        setUnsavedNoteIds((prev) => [...prev, noteId]);
+        alert("保存に失敗しました。");
+      });
   };
- 
+
   // ゴミ箱に移動
   const handleRemove = async () => {
 
@@ -376,23 +436,29 @@ export default function App() {
 
     await handleAddTag( selected.id, "Trash" );
   }
- 
+
   // 削除
-  const handleDelete = async () => {
+  const handleDelete = () => {
 
     if (!selected || !selected.id) return;
     if (!confirm("このノートを削除しますか？")) return;
 
-    try {
-      await withAuthRetry((token) => deleteNote(token, selected.id));
-  
-      setNotes((prev) => prev.filter((n) => n.id !== selected.id));
-      setSelected(null);
-  
-    } catch (err) {
-      console.error(err);
-      alert("削除に失敗しました。");
-    }
+    const deletedNote = selected;
+    const currentNotes = [...notes];
+
+    // 楽観的更新: UIから即座に削除
+    setNotes((prev) => prev.filter((n) => n.id !== deletedNote.id));
+    setSelected(null);
+
+    // バックグラウンドで削除
+    withAuthRetry(() => ds.deleteNote(deletedNote.id))
+      .catch((err) => {
+        console.error("Delete failed:", err);
+        // ロールバック
+        setNotes(currentNotes);
+        setSelected(deletedNote);
+        alert("削除に失敗しました。");
+      });
   };
 
   // 添付ファイル保存
@@ -400,121 +466,162 @@ export default function App() {
 
     if (!selected?.id || draftFiles.length === 0) return;
 
+    const total = draftFiles.length;
+    setUploadProgress({ current: 0, total });
+
     try {
-      const updated = await withAuthRetry((token) =>
-        saveAttachments(token, selected.id, draftFiles)
-      );
-  
+      // 1ファイルずつアップロードして進捗を更新
+      for (let i = 0; i < draftFiles.length; i++) {
+        await withAuthRetry(() => ds.uploadAttachment(selected.id, draftFiles[i]));
+        setUploadProgress({ current: i + 1, total });
+      }
+
+      // ノートを再取得
+      const refreshed = await withAuthRetry(() => ds.getNoteById(selected.id));
+
       setDraftFiles([]);
-      setAttachments(updated.files || []);
-  
+      setAttachments(refreshed.files || []);
+
       // ノート一覧も更新
       setNotes((prev) =>
-        prev.map((n) => (n.id === updated.id ? { ...n, ...updated, created_at: n.created_at } : n))
+        prev.map((n) => (n.id === refreshed.id ? { ...n, ...refreshed, created_at: n.created_at } : n))
       );
-  
+
     } catch (err) {
       console.error(err);
       alert("保存に失敗しました。");
+    } finally {
+      setUploadProgress(null);
     }
   };
-  
+
   // 添付ファイル削除
-  const handleDeleteAttachment = async (attachmentId: number, filename: string) => {
+  const handleDeleteAttachment = (attachmentId: number, filename: string) => {
 
     if (!selected) return;
     if (!confirm(`「${filename}」を削除しますか？`)) return;
 
-    try {
-      const updated = await withAuthRetry((token) =>
-        removeAttachment(token, selected.id, attachmentId)
-      );
-  
-      setDraftFiles([]);
-      setAttachments(updated.files || []);
-  
-      // ノート一覧更新
-      setNotes((prev) =>
-        prev.map((n) => (n.id === updated.id ? { ...n, ...updated, created_at: n.created_at } : n))
-      );
-  
-    } catch (err) {
-      console.error(err);
-      alert("添付ファイルの削除に失敗しました。");
-    }
+    // 現在の添付ファイル一覧を保存（ロールバック用）
+    const currentAttachments = [...attachments];
+
+    // 楽観的更新: UIから即座に削除
+    const optimisticAttachments = attachments.filter(a => a.id !== attachmentId);
+    setAttachments(optimisticAttachments);
+
+    // バックグラウンドで削除
+    withAuthRetry(() => ds.deleteAttachment(attachmentId))
+      .catch((err) => {
+        console.error("Attachment delete failed:", err);
+        // ロールバック
+        setAttachments(currentAttachments);
+        alert("添付ファイルの削除に失敗しました。");
+      });
   };
 
   // タグ追加
-  const handleAddTag = async (noteId: number, tagName: string) => {
+  const handleAddTag = (noteId: number, tagName: string) => {
 
     if (!tagName.trim()) return;
 
-    try {
-      const updatedTags = await withAuthRetry((token) =>
-        addTag(token, noteId, tagName.trim())
-      );
-  
-      setTags(updatedTags || []);
-      setNotes((prev) =>
-        prev.map((n) =>
-          n.id === noteId ? { ...n, tags: updatedTags } : n
-        )
-      );
-  
-      // タグ一覧も更新
-      await fetchTags();
-  
-    } catch (err) {
-      console.error(err);
-      alert("タグの追加に失敗しました。");
-    }
-  };
-  
-  // タグ削除
-  const handleRemoveTag = async (noteId: number, tagName: string) => {
+    const trimmedTag = tagName.trim();
+    const currentNote = notes.find(n => n.id === noteId);
+    if (!currentNote) return;
 
-    try {
-      const updatedTags = await withAuthRetry((token) =>
-        removeTag(token, noteId, tagName)
-      );
-  
-      setTags(updatedTags || []);
-      setNotes((prev) =>
-        prev.map((n) =>
-          n.id === noteId ? { ...n, tags: updatedTags } : n
-        )
-      );
-  
-    } catch (err) {
-      console.error(err);
-      alert("タグの削除に失敗しました。");
-    }
+    const currentTags = currentNote.tags || [];
+    if (currentTags.includes(trimmedTag)) return; // 既に存在
+
+    const optimisticTags = [...currentTags, trimmedTag];
+
+    // 楽観的更新
+    setTags(optimisticTags);
+    setNotes((prev) =>
+      prev.map((n) =>
+        n.id === noteId ? { ...n, tags: optimisticTags } : n
+      )
+    );
+
+    // バックグラウンドで保存
+    withAuthRetry(() => ds.addTag(noteId, trimmedTag))
+      .then(() => {
+        fetchTags(); // タグ一覧も更新
+      })
+      .catch((err) => {
+        console.error("Tag add failed:", err);
+        // ロールバック
+        setTags(currentTags);
+        setNotes((prev) =>
+          prev.map((n) =>
+            n.id === noteId ? { ...n, tags: currentTags } : n
+          )
+        );
+      });
+  };
+
+  // タグ削除
+  const handleRemoveTag = (noteId: number, tagName: string) => {
+
+    const currentNote = notes.find(n => n.id === noteId);
+    if (!currentNote) return;
+
+    const currentTags = currentNote.tags || [];
+    const optimisticTags = currentTags.filter(t => t !== tagName);
+
+    // 楽観的更新
+    setTags(optimisticTags);
+    setNotes((prev) =>
+      prev.map((n) =>
+        n.id === noteId ? { ...n, tags: optimisticTags } : n
+      )
+    );
+
+    // バックグラウンドで保存
+    withAuthRetry(() => ds.removeTag(noteId, tagName))
+      .catch((err) => {
+        console.error("Tag remove failed:", err);
+        // ロールバック
+        setTags(currentTags);
+        setNotes((prev) =>
+          prev.map((n) =>
+            n.id === noteId ? { ...n, tags: currentTags } : n
+          )
+        );
+      });
   };
 
   // Star（is_important）のトグル
-  const handleToggleStar = async (noteId: number) => {
+  const handleToggleStar = (noteId: number) => {
 
-    try {
-      const newValue = await withAuthRetry((token) =>
-        toggleStar(token, noteId)
-      );
-  
-      // notes 一覧の該当ノートだけ更新
-      setNotes((prev) =>
-        prev.map((n) =>
-          n.id === noteId ? { ...n, is_important: newValue } : n
-        )
-      );
-  
-      // 選択中ノートも更新
-      if (selected && selected.id === noteId) {
-        setSelected({ ...selected, is_important: newValue });
-      }
-  
-    } catch (err) {
-      console.error(err);
-      alert("スター更新に失敗しました。");
+    // 現在の値を取得
+    const currentNote = notes.find(n => n.id === noteId);
+    if (!currentNote) return;
+
+    const optimisticValue = currentNote.is_important ? 0 : 1;
+
+    // 楽観的更新: UIを即座に更新
+    setNotes((prev) =>
+      prev.map((n) =>
+        n.id === noteId ? { ...n, is_important: optimisticValue } : n
+      )
+    );
+
+    if (selected && selected.id === noteId) {
+      setSelected({ ...selected, is_important: optimisticValue });
     }
+
+    // バックグラウンドで保存
+    withAuthRetry(() => ds.toggleStar(noteId))
+      .catch((err) => {
+        console.error("Star toggle failed:", err);
+        // 失敗時はロールバック
+        setNotes((prev) =>
+          prev.map((n) =>
+            n.id === noteId ? { ...n, is_important: currentNote.is_important } : n
+          )
+        );
+        if (selected && selected.id === noteId) {
+          setSelected((curr) => curr ? { ...curr, is_important: currentNote.is_important } : null);
+        }
+      });
   };
 
   // インポート
@@ -522,17 +629,17 @@ export default function App() {
 
     const file = e.target.files?.[0];
     if (!file) return;
- 
+
     try {
-      const result = await withAuthRetry((token) =>
-        importNotes(token, file)
+      const result = await withAuthRetry(() =>
+        ds.importNotes(file)
       );
-  
+
       alert(result.message);
-  
+
       // インポート後に一覧更新
       await fetchNotes();
-  
+
     } catch (err) {
       console.error(err);
       alert("Import failed.");
@@ -545,19 +652,19 @@ export default function App() {
   const handleExport = async () => {
 
     try {
-      const blob = await withAuthRetry((token) =>
-        exportNotes(token)
+      const blob = await withAuthRetry(() =>
+        ds.exportNotes()
       );
-  
+
       const url = window.URL.createObjectURL(blob);
-  
+
       const a = document.createElement("a");
       a.href = url;
       a.download = `simplynotes_export_${new Date().toISOString().slice(0, 10)}.zip`;
       a.click();
-  
+
       window.URL.revokeObjectURL(url);
-  
+
     } catch (err) {
       console.error(err);
       alert("エクスポートに失敗しました。");
@@ -566,7 +673,11 @@ export default function App() {
 
   // ログアウト
   const handleLogout = () => {
-    localStorage.removeItem("token"); // トークン削除
+    localStorage.removeItem("token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("drive_token");
+    localStorage.removeItem("backend");
+    clearDataSource();
     window.location.href = loginUrl;
   };
 
@@ -575,39 +686,51 @@ export default function App() {
   // ------------------------------------------------------------
 
   useEffect(() => {
-  
-    async function init() {
-      const token = localStorage.getItem("token");
-      const refresh = localStorage.getItem("refresh_token");
-  
-      if (!token || !refresh) {
-        window.location.href = loginUrl;
-        return;
-      }
-  
-      // 初回ロード時に token の期限をチェック
-      const ms = msUntilExpiry(token);
-  
-      // exp が切れてる or 残り少ない時に refresh を試す
-      if (ms !== null && ms < 60_000) {
 
-        try {
-          await refreshAccessToken();
-        } catch {
-          localStorage.removeItem("token");
-          localStorage.removeItem("refresh_token");
+    async function init() {
+      const backend = localStorage.getItem("backend") || "api";
+
+      if (backend === "drive") {
+        // Google Drive モード: drive_token をチェック
+        const driveToken = localStorage.getItem("drive_token");
+        if (!driveToken) {
           window.location.href = loginUrl;
           return;
         }
+      } else {
+        // API モード: token と refresh_token をチェック
+        const token = localStorage.getItem("token");
+        const refresh = localStorage.getItem("refresh_token");
+
+        if (!token || !refresh) {
+          window.location.href = loginUrl;
+          return;
+        }
+
+        // 初回ロード時に token の期限をチェック
+        const ms = msUntilExpiry(token);
+
+        // exp が切れてる or 残り少ない時に refresh を試す
+        if (ms !== null && ms < 60_000) {
+
+          try {
+            await ds.refreshAccessToken();
+          } catch {
+            localStorage.removeItem("token");
+            localStorage.removeItem("refresh_token");
+            window.location.href = loginUrl;
+            return;
+          }
+        }
       }
-  
+
       // 初期ロード
       fetchNotes();
       fetchTags();
     }
-  
+
     init();
-  
+
   }, []);
 
 
@@ -627,7 +750,22 @@ export default function App() {
     return () => document.removeEventListener("click", handleClickOutside);
 
   }, []);
-  
+
+  // タブがフォーカスされた時に自動リフレッシュ
+  useEffect(() => {
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchNotes();
+        fetchTags();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+
+  }, []);
+
   // ------------------------------------------------------------
   // UI 表示
   // ------------------------------------------------------------
@@ -640,7 +778,7 @@ export default function App() {
     if (t === 'work')  return 'bg-blue-200 text-blue-800';
     if (t === 'idea' )  return 'bg-green-200 text-green-800';
     if (t === 'trash') return 'bg-red-200 text-red-800';
- 
+
     return 'bg-blue-100 text-blue-600';
   };
 
@@ -674,22 +812,51 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-2">
-         
-            {/* 更新ボタン */}
-            <button
-              onClick={() => {
-                fetchNotes();
-                fetchTags();
-              }} className="bg-blue-500 text-white px-2 py-2 rounded hover:bg-blue-600" title="Refresh View" >
-              <RefreshCcw className="w-4 h-4" />
-            </button>
- 
-            {/* 新規ボタン */}
-            <button
-              onClick={handleNew}
-              className="bg-green-500 text-white px-2 py-2 rounded hover:bg-green-600" title="New Note" >
-              <FilePlus className="w-4 h-4" />
-            </button>
+
+            {showTrashOnly ? (
+              /* ゴミ箱を空にするボタン */
+              filteredNotes.length > 0 && (
+                <button
+                  disabled={isEmptyingTrash}
+                  onClick={async () => {
+                    if (!confirm("ゴミ箱を空にしますか？この操作は取り消せません。")) return;
+                    setIsEmptyingTrash(true);
+                    try {
+                      const result = await withAuthRetry(() => ds.emptyTrash());
+                      alert(`${result.deleted}件のノートを削除しました。`);
+                      fetchNotes();
+                      fetchTags();
+                    } catch (err) {
+                      console.error(err);
+                      alert("ゴミ箱を空にできませんでした。");
+                    } finally {
+                      setIsEmptyingTrash(false);
+                    }
+                  }}
+                  className={`flex items-center gap-1 px-2 py-2 rounded ${
+                    isEmptyingTrash
+                      ? "bg-red-400 text-white cursor-wait"
+                      : "bg-red-600 text-white hover:bg-red-700"
+                  }`}
+                  title="Empty Trash"
+                >
+                  {isEmptyingTrash ? (
+                    <RefreshCcw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </button>
+              )
+            ) : (
+              /* 新規ボタン */
+              <button
+                onClick={handleNew}
+                className="bg-green-500 text-white px-2 py-2 rounded hover:bg-green-600"
+                title="New Note"
+              >
+                <FilePlus className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           {/* 隠し importfile input */}
@@ -703,7 +870,7 @@ export default function App() {
 
           {/* ドロップダウンメニュー */}
           {showMenu && (
-            <div className="absolute top-12 left-3 bg-white border border-gray-200 rounded-lg shadow-lg z-10 
+            <div className="absolute top-12 left-3 bg-white border border-gray-200 rounded-lg shadow-lg z-10
                             transition-all duration-150 transform origin-top" >
 
               <button
@@ -764,29 +931,29 @@ export default function App() {
           {/* タグ候補（#で始まる時だけ出す） */}
           {isFocused && searchQuery.includes("#") && showTagList && (
             <div className="absolute left-0 right-0 top-full bg-gray-50 border border-gray-300 rounded-b max-h-32 overflow-y-auto z-10 text-sm shadow-sm">
-  
+
               {allTags
                 .map((tag) => (
                   <div
                     key={tag.name}
-  
+
                     onMouseDown={(e) => {
                       e.preventDefault(); // inputにフォーカスを戻さない
                       setSearchQuery(prev => {
-  
+
                         // すでに同じタグが含まれていたら追加しない
                         if (prev.includes(`#${tag.name}`)) return prev;
-  
+
                         // 最後の単語が "#" の場合はそこに補完
                         if (prev.trim().endsWith("#")) {
                           return prev.trim() + tag.name + " ";
                         }
-  
+
                         // 通常は末尾に追記
                         return `${prev.trim()} #${tag.name} `;
                       });
                     }}
-  
+
                     className="px-2 py-1 hover:bg-gray-100 cursor-pointer" >
                     #{tag.name} ({tag.note_count ?? 0})
                   </div>
@@ -796,7 +963,17 @@ export default function App() {
         </div>
 
         {/* フィルタ済みノート一覧 */}
-        <div tabIndex={-1} className="flex-1 border-b overflow-y-auto">
+        <div tabIndex={-1} className="flex-1 border-b overflow-y-auto relative">
+
+          {/* ローディングオーバーレイ */}
+          {isLoading && (
+            <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-10">
+              <div className="text-gray-500 flex items-center gap-2">
+                <RefreshCcw className="w-5 h-5 animate-spin" />
+                <span>読み込み中...</span>
+              </div>
+            </div>
+          )}
 
           {filteredNotes.map((note) => (
             <div
@@ -817,7 +994,7 @@ export default function App() {
               </div>
 
               <div className="flex items-center justify-between">
-  
+
                 {/* 左：日付＋タグ */}
                 <div className="flex items-center flex-wrap gap-1">
                   <span className="mr-2">
@@ -831,7 +1008,7 @@ export default function App() {
                     </span>
                   ))}
                 </div>
-  
+
                 {/* 右：スター（SVGアイコン） */}
                 <button
                   tabIndex={-1}
@@ -861,12 +1038,12 @@ export default function App() {
                     </svg>
                   )}
                 </button>
-  
+
               </div>
-  
+
             </div>
           ))}
-  
+
         </div>
 
         <div className="p-3 border-t mt-auto flex justify-between items-center min-h-[58px]">
@@ -888,7 +1065,7 @@ export default function App() {
               showTrashOnly ? "bg-red-500 text-white" : "bg-gray-200 hover:bg-gray-300"
             }`}
           >
-            🗑 Trash Box
+            <Trash2 className="w-4 h-4" /> TrashBox
           </button>
         </div>
 
@@ -896,7 +1073,17 @@ export default function App() {
       </div>
 
       {/* 右カラム */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col relative">
+
+        {/* ローディングオーバーレイ */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-10">
+            <div className="text-gray-500 flex items-center gap-2">
+              <RefreshCcw className="w-5 h-5 animate-spin" />
+              <span>読み込み中...</span>
+            </div>
+          </div>
+        )}
 
         {/* ヘッダー */}
         <div className="p-3 border-b">
@@ -955,7 +1142,7 @@ export default function App() {
 
                 {selected && (
                   showTrashOnly ? (
-                    <button tabIndex={-1} onClick={handleDelete} className="text-red-600 hover:text-red-800"> 
+                    <button tabIndex={-1} onClick={handleDelete} className="text-red-600 hover:text-red-800">
                       🗑️ Delete Permanently
                     </button>
                   ) : (
@@ -969,9 +1156,9 @@ export default function App() {
             )}
           </div>
 
-  
+
           {selected && (
- 
+
             <div className="flex flex-wrap items-center gap-2 mt-2">
 
               {/* タグ追加 */}
@@ -1006,7 +1193,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => handleRemoveTag(selected.id, tag)}
-                    className="absolute -top-[6px] -right-[8px] w-4 h-4 flex items-center justify-center 
+                    className="absolute -top-[6px] -right-[8px] w-4 h-4 flex items-center justify-center
                                bg-white border border-gray-300 rounded-full hover:bg-gray-100" >
                     <span className="relative w-2 h-2">
                       <span className="absolute left-0 top-1/2 w-full h-[1px] bg-gray-600 rotate-45 origin-center"></span>
@@ -1020,7 +1207,7 @@ export default function App() {
             </div>
           )}
         </div>
-  
+
 
         {/* 本文 */}
         <div
@@ -1085,7 +1272,7 @@ export default function App() {
                     title="Delete">
                     🗑️
                   </button>
-            
+
                   <button
                     onClick={() => setPreviewFile(f)}
                     className="text-blue-600 underline break-all text-left hover:text-blue-800 flex-1" >
@@ -1096,7 +1283,7 @@ export default function App() {
               ))}
             </ul>
           )}
-        
+
           {/* 添付ファイル追加 */}
           {draftFiles.length > 0 && selected?.id && (
 
@@ -1105,16 +1292,36 @@ export default function App() {
 
                 <button
                   onClick={handleSaveAttachment}
-                  className="bg-blue-500 text-white text-sm px-2 py-0.5 rounded hover:bg-blue-600" >
+                  disabled={uploadProgress !== null}
+                  className={`text-white text-sm px-2 py-0.5 rounded ${
+                    uploadProgress !== null
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-blue-500 hover:bg-blue-600"
+                  }`} >
                   📤
                 </button>
-              
+
                 <ul className="list-disc list-inside text-sm mb-0">
                   {draftFiles.map((f) => (
                     <li key={f.name}>{f.name}</li>
                   ))}
                 </ul>
               </div>
+
+              {/* プログレスバー */}
+              {uploadProgress && (
+                <div className="mb-2">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                    <span>アップロード中... {uploadProgress.current}/{uploadProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1125,7 +1332,7 @@ export default function App() {
 
           {/* 左：作成日時・更新日時 */}
           <div className="text-sm text-gray-500">
-            {selected && (() => {
+            {!isCreating && selected && (() => {
               const currentNote = notes.find(n => n.id === selected.id);
               return (
                 <>
@@ -1138,7 +1345,28 @@ export default function App() {
           </div>
 
           {/* 右：Saveボタン */}
-          {!unsavedNoteIds.includes(selected?.id ?? -1) ? (
+          {isCreating && localStorage.getItem("backend") === "drive" ? (
+            // Google Drive接続時のみ新規ノートのSaveボタンを表示（API接続時は自動保存）
+            <button
+              onClick={handleSaveNewNote}
+              disabled={!content.trim() || isSavingNew}
+              className={`px-3 py-1 rounded flex items-center gap-2 ${
+                isSavingNew
+                  ? "bg-green-400 text-white cursor-wait"
+                  : content.trim()
+                    ? "bg-green-500 text-white hover:bg-green-600"
+                    : "bg-gray-300 text-gray-500 cursor-not-allowed"
+              }`}>
+              {isSavingNew ? (
+                <>
+                  <RefreshCcw className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>💾 New Note</>
+              )}
+            </button>
+          ) : !unsavedNoteIds.includes(selected?.id ?? -1) ? (
             <div className="px-3 py-1"> </div>
           ) : (
             <button
@@ -1163,16 +1391,16 @@ export default function App() {
             <h3 className="text-lg font-semibold mb-3 break-all">
               {previewFile.filename}
             </h3>
-      
+
             {previewFile.filename.match(/\.(png|jpe?g|gif|webp)$/i) ? (
               <img
-                src={apiUrl(previewFile.url)}
+                src={ds.resolveAttachmentUrl(previewFile.url)}
                 alt={previewFile.filename}
                 className="max-w-full max-h-[70vh] object-contain mx-auto"
               />
             ) : previewFile.filename.match(/\.(pdf)$/i) ? (
               <iframe
-                src={apiUrl(previewFile.url)}
+                src={ds.resolveAttachmentUrl(previewFile.url)}
                 className="w-full h-[70vh]"
                 title={previewFile.filename}
               />
@@ -1182,7 +1410,7 @@ export default function App() {
                   Preview is not available for this file.
                 </p>
                 <a
-                  href={apiUrl(previewFile.url)}
+                  href={ds.resolveAttachmentUrl(previewFile.url)}
                   target="_blank"
                   className="text-blue-600 underline" >
 
@@ -1190,7 +1418,7 @@ export default function App() {
                 </a>
               </div>
             )}
-      
+
             <button
               onClick={() => setPreviewFile(null)}
               className="mt-4 bg-gray-200 px-3 py-1 rounded hover:bg-gray-300" >
@@ -1200,7 +1428,7 @@ export default function App() {
           </div>
         </div>
       )}
-      
+
     </div>
  );
 }

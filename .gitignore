@@ -1,5 +1,6 @@
 data/
 compose.yml
+ui/public/config.json
 
 
 # Logs
