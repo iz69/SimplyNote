@@ -37,6 +37,9 @@ export default function App() {
   const [isSavingNew, setIsSavingNew] = useState(false);  // 新規ノート保存中
   const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);  // ゴミ箱削除中
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);  // アップロード進捗
+  const [autoRefreshOnFocus, setAutoRefreshOnFocus] = useState(
+    () => localStorage.getItem("autoRefreshOnFocus") !== "false"  // デフォルトはON
+  );
 
   // フィルタ済みノート一覧を生成
   const filteredNotes = notes.filter((note) => {
@@ -755,7 +758,7 @@ export default function App() {
   useEffect(() => {
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+      if (autoRefreshOnFocus && document.visibilityState === "visible") {
         fetchNotes();
         fetchTags();
       }
@@ -764,7 +767,7 @@ export default function App() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
 
-  }, []);
+  }, [autoRefreshOnFocus]);
 
   // ------------------------------------------------------------
   // UI 表示
@@ -872,6 +875,26 @@ export default function App() {
           {showMenu && (
             <div className="absolute top-12 left-3 bg-white border border-gray-200 rounded-lg shadow-lg z-10
                             transition-all duration-150 transform origin-top" >
+
+              <button
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center justify-between"
+                onClick={() => {
+                  const newValue = !autoRefreshOnFocus;
+                  setAutoRefreshOnFocus(newValue);
+                  localStorage.setItem("autoRefreshOnFocus", String(newValue));
+                }}
+              >
+                <span>🔄 Auto Refresh</span>
+                <span className={`ml-2 text-xs px-2 py-0.5 rounded ${
+                  autoRefreshOnFocus
+                    ? "bg-green-100 text-green-700"
+                    : "bg-gray-200 text-gray-500"
+                }`}>
+                  {autoRefreshOnFocus ? "ON" : "OFF"}
+                </span>
+              </button>
+
+              <hr className="my-1 border-gray-200" />
 
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-gray-100"
