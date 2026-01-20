@@ -28,16 +28,16 @@ DB Sqlite3
 ### WebUI Login
 <img width="324" height="585" alt="image" src="https://github.com/user-attachments/assets/8c0fc451-501b-4fc8-95bb-94b207e85e7b" />
 
-### Vim plugin
-https://github.com/iz69/SimplyNote_vim<br/>
-<img src="https://github.com/user-attachments/assets/eeb41852-6d84-40a1-ba92-8e06f5c01caa" width="450" alt="SimplyNote_vim" />
-
 ### Android Apps
 <img src="https://github.com/user-attachments/assets/1dae6e88-be43-4697-9513-c0b023164bcc" width="300" alt="SimplyNote_Android" /></br>
 
 <a href="https://play.google.com/store/apps/details?id=com.kuromaru_fx.simplynote">
 <img alt="GetItOnGooglePlay_Badge_Web_color_Japanese" src="https://github.com/user-attachments/assets/49ebb2ad-8f90-4bd0-a27e-2834ed93b159" style="width:180px;" />
 </a>
+
+### Vim plugin
+https://github.com/iz69/SimplyNote_vim<br/>
+<img src="https://github.com/user-attachments/assets/eeb41852-6d84-40a1-ba92-8e06f5c01caa" width="450" alt="SimplyNote_vim" />
 
 ---
 
