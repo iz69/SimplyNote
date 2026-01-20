@@ -23,6 +23,7 @@ Other client
 DB Sqlite3
 
 ### WebUI
+VPN環境もしくはWebアクセス制限付きでの使用が前提<br/>
 <img src="https://github.com/user-attachments/assets/84140cfc-99d3-42f8-ac33-127c705338b1" width="600" alt="SimplyNote_Desktop" />
 
 ### WebUI Login
