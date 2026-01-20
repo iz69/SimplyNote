@@ -3,8 +3,10 @@ import { basePath, apiUrl } from './utils'
 import { clearDataSource } from './dataSource'
 import {
   generateAuthUrl,
-  extractTokenFromUrl,
+  parseTokenData,
   saveDriveToken,
+  saveDriveRefreshToken,
+  saveDriveTokenExpiry,
   hasClientId,
 } from './drive/driveAuth'
 
@@ -79,25 +81,28 @@ export default function Login() {
   const handleDriveConnect = () => {
     setDriveError("");
 
-    // 入力がURLの場合、トークンを抽出
-    let token = driveTokenInput.trim();
-    if (token.startsWith("http")) {
-      const extracted = extractTokenFromUrl(token);
-      if (extracted) {
-        token = extracted;
-      } else {
-        setDriveError("URLからトークンを抽出できませんでした。");
-        return;
-      }
-    }
-
-    if (!token) {
+    const input = driveTokenInput.trim();
+    if (!input) {
       setDriveError("トークンを入力してください。");
       return;
     }
 
+    // JSON形式または旧形式（access_tokenのみ）を解析
+    const tokenData = parseTokenData(input);
+    if (!tokenData) {
+      setDriveError("トークンの形式が正しくありません。");
+      return;
+    }
+
     // トークン保存
-    saveDriveToken(token);
+    saveDriveToken(tokenData.access_token);
+    if (tokenData.refresh_token) {
+      saveDriveRefreshToken(tokenData.refresh_token);
+    }
+    if (tokenData.expires_in) {
+      saveDriveTokenExpiry(tokenData.expires_in);
+    }
+
     localStorage.setItem("backend", "drive");
     clearDataSource();
 
@@ -193,7 +198,7 @@ export default function Login() {
                   <div className="text-sm text-gray-600 mb-3">
                     <p className="font-medium mb-2">Step 2: 表示されたトークンを貼り付け</p>
                     <textarea
-                      placeholder="ya29...."
+                      placeholder='{"access_token":"...","refresh_token":"...","expires_in":3600}'
                       value={driveTokenInput}
                       onChange={(e) => setDriveTokenInput(e.target.value)}
                       className="w-full border rounded p-2 text-sm focus:outline-none focus:ring focus:ring-green-200"

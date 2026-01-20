@@ -3,6 +3,7 @@ import { FilePlus, RefreshCcw, Clock, Trash2 } from "lucide-react";
 import { getDataSource, clearDataSource } from "./dataSource";
 import type { Note, Tag, Attachment } from "./dataSource";
 import { basePath } from "./utils"
+import { msUntilDriveTokenExpiry, hasDriveRefreshToken, clearDriveToken } from "./drive/driveAuth"
 
 export default function App() {
 
@@ -178,6 +179,50 @@ export default function App() {
           console.error("Token refresh failed", err);
           localStorage.removeItem("token");
           localStorage.removeItem("refresh_token");
+          window.location.href = loginUrl;
+        }
+      }, ahead);
+    }
+
+    scheduleRefresh();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
+  // Driveモード: トークンリフレッシュをスケジュール
+  useEffect(() => {
+    const backend = localStorage.getItem("backend") || "api";
+    if (backend !== "drive") return;
+
+    // リフレッシュトークンがない場合はスキップ
+    if (!hasDriveRefreshToken()) return;
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let isMounted = true;
+
+    function scheduleRefresh() {
+      const ms = msUntilDriveTokenExpiry();
+      if (ms == null) return;
+
+      // 有効期限の5分前にリフレッシュ
+      const ahead = Math.max(5000, ms - 5 * 60 * 1000);
+
+      timeoutId = setTimeout(async () => {
+        if (!isMounted) return;
+        try {
+          await ds.refreshAccessToken();
+          if (isMounted) {
+            scheduleRefresh();  // 次のリフレッシュをスケジュール
+          }
+        } catch (err) {
+          console.error("Drive token refresh failed", err);
+          // リフレッシュ失敗 → 強制ログアウト
+          clearDriveToken();
+          localStorage.removeItem("backend");
+          clearDataSource();
           window.location.href = loginUrl;
         }
       }, ahead);
@@ -676,9 +721,12 @@ export default function App() {
 
   // ログアウト
   const handleLogout = () => {
+    // API用
     localStorage.removeItem("token");
     localStorage.removeItem("refresh_token");
-    localStorage.removeItem("drive_token");
+    // Drive用（clearDriveTokenでまとめて削除）
+    clearDriveToken();
+    // 共通
     localStorage.removeItem("backend");
     clearDataSource();
     window.location.href = loginUrl;

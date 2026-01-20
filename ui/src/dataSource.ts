@@ -11,6 +11,10 @@ import {
   deleteFile,
   downloadFile,
 } from './drive/driveApi'
+import {
+  refreshAccessToken as driveRefreshAccessToken,
+  hasDriveRefreshToken,
+} from './drive/driveAuth'
 
 // ============================================================
 // 型定義
@@ -383,7 +387,11 @@ export class DriveDataSource implements NotesRepository {
   }
 
   async refreshAccessToken(): Promise<string> {
-    // Drive版ではトークンリフレッシュはサポートしない（再ログインが必要）
+    // リフレッシュトークンがあれば使用
+    if (hasDriveRefreshToken()) {
+      return driveRefreshAccessToken();
+    }
+    // リフレッシュトークンがない場合は再ログインが必要
     throw new Error('drive_token_expired');
   }
 
