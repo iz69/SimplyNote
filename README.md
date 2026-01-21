@@ -27,7 +27,7 @@ VPN環境もしくはWebアクセス制限付きでの使用が前提<br/>
 <img src="https://github.com/user-attachments/assets/84140cfc-99d3-42f8-ac33-127c705338b1" width="600" alt="SimplyNote_Desktop" />
 
 ### WebUI Login
-<img width="324" height="585" alt="image" src="https://github.com/user-attachments/assets/8c0fc451-501b-4fc8-95bb-94b207e85e7b" />
+<img width="403" height="665" alt="image" src="https://github.com/user-attachments/assets/090f2537-3617-44ea-91de-bf931aa4ac33" />
 
 ### Android Apps
 <img src="https://github.com/user-attachments/assets/1dae6e88-be43-4697-9513-c0b023164bcc" width="300" alt="SimplyNote_Android" /></br>
