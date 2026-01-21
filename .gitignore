@@ -2,9 +2,6 @@ data/
 compose.yml
 ui/public/config.json
 
-# SecretId
-simplynote_google_auth.php
-
 # Logs
 logs
 *.log
