@@ -53,10 +53,5 @@ CONTACT: kuro.maru.202301@gmail.com<br/>
 本ソフトウェアは現状のまま提供され、いかなる保証もありません。<br/>
 作者は本ソフトウェアの利用により生じた損害について責任を負いません。<br/>
 
-## 💖 Support
-If you find this project useful, consider supporting me via [GitHub Sponsors](https://github.com/sponsors/iz69).
-
-please contact me. See LICENSE for details.
-
-### Support & Donation
+## 💖 Support & Donation
 GitHub Sponsors: github.com/sponsors/iz69
