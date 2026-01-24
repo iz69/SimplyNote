@@ -21,15 +21,15 @@ I wanted a Simplenote-like experience where I truly own my data. SimplyNote allo
 - **Recommended Proxy**: Nginx (via `proxy_pass`)
 - **Security Note**: Designed to be used within a **VPN** or behind strict web access controls.
 
-**__WebUI__**<br/>
+**WebUI**<br/>
 <img width="202" height="333" alt="image" src="https://github.com/user-attachments/assets/090f2537-3617-44ea-91de-bf931aa4ac33" />
 <img width="608" height="373" alt="Screenshot_web_20260124-091209" src="https://github.com/user-attachments/assets/dcf7a4c4-adf8-4846-a8fd-86894b112c00" />
 <br/>
-**__Android App__**</br>
-<img width="240" height="485" alt="Screenshot_20260124-100612" src="https://github.com/user-attachments/assets/a666a3d8-d98b-42f2-bdaa-33507f351eb2" />
-<img width="240" height="485" alt="Screenshot_20260124-091209" src="https://github.com/user-attachments/assets/3605659c-0626-4092-9c84-ebfed1a60863" />
+**Android App**</br>
+<img width="160" height="323" alt="Screenshot_20260124-100612" src="https://github.com/user-attachments/assets/a666a3d8-d98b-42f2-bdaa-33507f351eb2" />
+<img width="160" height="323" alt="Screenshot_20260124-091209" src="https://github.com/user-attachments/assets/3605659c-0626-4092-9c84-ebfed1a60863" />
 <br/>
-**__vim plugin__**</br>
+**vim plugin**</br>
 <img width="225" alt="SimplyNote_vim" src="https://github.com/user-attachments/assets/eeb41852-6d84-40a1-ba92-8e06f5c01caa" />
 
 ## 📜 License
