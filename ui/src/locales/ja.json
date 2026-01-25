@@ -28,13 +28,15 @@
     "saving": "保存中...",
     "delete": "削除",
     "deletePermanently": "完全に削除",
-    "restore": "復元"
+    "restore": "復元",
+    "close": "閉じる"
   },
   "attachments": {
     "title": "添付ファイル",
     "delete": "削除",
     "selectFile": "ファイル選択",
-    "pendingUpload": "{{count}}件のファイルがアップロード待ち"
+    "pendingUpload": "{{count}}件のファイルがアップロード待ち",
+    "uploading": "アップロード中... {{current}}/{{total}}"
   },
   "timestamps": {
     "created": "作成日時",
@@ -59,6 +61,24 @@
     "importFailed": "インポートに失敗しました。",
     "exportFailed": "エクスポートに失敗しました。",
     "emptyTrash": "ゴミ箱を空にできませんでした。"
+  },
+  "login": {
+    "apiConnection": "API接続",
+    "apiUrlPlaceholder": "API URL (例: https://example.com/simplynote-api)",
+    "username": "ユーザー名",
+    "password": "パスワード",
+    "loginButton": "ログイン",
+    "loginFailed": "ユーザー名またはパスワードが正しくありません。",
+    "or": "または",
+    "driveConnection": "Google Drive接続",
+    "clientIdMissing": "Google Client IDが設定されていません。",
+    "step1": "Step 1: Googleで認証",
+    "authWithGoogle": "Googleアカウントで認証",
+    "step2": "Step 2: 表示されたトークンを貼り付け",
+    "tokenPlaceholder": "{\"access_token\":\"...\",\"refresh_token\":\"...\",\"expires_in\":3600}",
+    "tokenRequired": "トークンを入力してください。",
+    "tokenInvalid": "トークンの形式が正しくありません。",
+    "connectDrive": "Google Driveに接続"
   },
   "language": {
     "label": "言語",

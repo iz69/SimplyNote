@@ -1103,7 +1103,7 @@ export default function App() {
             <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-10">
               <div className="text-gray-500 flex items-center gap-2">
                 <RefreshCcw className="w-5 h-5 animate-spin" />
-                <span>読み込み中...</span>
+                <span>{t("app.loading")}</span>
               </div>
             </div>
           )}
@@ -1445,7 +1445,7 @@ export default function App() {
               {uploadProgress && (
                 <div className="mb-2">
                   <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-                    <span>アップロード中... {uploadProgress.current}/{uploadProgress.total}</span>
+                    <span>{t("attachments.uploading", { current: uploadProgress.current, total: uploadProgress.total })}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
@@ -1557,7 +1557,7 @@ export default function App() {
               onClick={() => setPreviewFile(null)}
               className="mt-4 bg-gray-200 px-3 py-1 rounded hover:bg-gray-300" >
 
-              閉じる
+              {t("actions.close")}
             </button>
           </div>
         </div>

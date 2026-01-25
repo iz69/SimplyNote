@@ -28,13 +28,15 @@
     "saving": "Saving...",
     "delete": "Delete",
     "deletePermanently": "Delete Permanently",
-    "restore": "Restore"
+    "restore": "Restore",
+    "close": "Close"
   },
   "attachments": {
     "title": "Attachments",
     "delete": "Delete",
     "selectFile": "Select File",
-    "pendingUpload": "{{count}} file(s) pending upload"
+    "pendingUpload": "{{count}} file(s) pending upload",
+    "uploading": "Uploading... {{current}}/{{total}}"
   },
   "timestamps": {
     "created": "Created",
@@ -59,6 +61,24 @@
     "importFailed": "Import failed.",
     "exportFailed": "Export failed.",
     "emptyTrash": "Failed to empty trash."
+  },
+  "login": {
+    "apiConnection": "API Connection",
+    "apiUrlPlaceholder": "API URL (e.g., https://example.com/simplynote-api)",
+    "username": "Username",
+    "password": "Password",
+    "loginButton": "Login",
+    "loginFailed": "Incorrect username or password.",
+    "or": "or",
+    "driveConnection": "Google Drive Connection",
+    "clientIdMissing": "Google Client ID is not configured.",
+    "step1": "Step 1: Authenticate with Google",
+    "authWithGoogle": "Authenticate with Google Account",
+    "step2": "Step 2: Paste the displayed token",
+    "tokenPlaceholder": "{\"access_token\":\"...\",\"refresh_token\":\"...\",\"expires_in\":3600}",
+    "tokenRequired": "Please enter a token.",
+    "tokenInvalid": "Token format is incorrect.",
+    "connectDrive": "Connect to Google Drive"
   },
   "language": {
     "label": "Language",

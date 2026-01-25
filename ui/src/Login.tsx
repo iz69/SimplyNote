@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { basePath, apiUrl } from './utils'
 import { clearDataSource } from './dataSource'
 import {
@@ -11,6 +12,7 @@ import {
 } from './drive/driveAuth'
 
 export default function Login() {
+  const { t } = useTranslation();
 
   const [username, setUsername] = useState(localStorage.getItem("username") || "");
   const [password, setPassword] = useState("");
@@ -74,7 +76,7 @@ export default function Login() {
 
     } catch (err) {
       console.error(err);
-      setError("Incorrect username or password.");
+      setError(t("login.loginFailed"));
     }
   };
 
@@ -83,14 +85,14 @@ export default function Login() {
 
     const input = driveTokenInput.trim();
     if (!input) {
-      setDriveError("トークンを入力してください。");
+      setDriveError(t("login.tokenRequired"));
       return;
     }
 
     // JSON形式または旧形式（access_tokenのみ）を解析
     const tokenData = parseTokenData(input);
     if (!tokenData) {
-      setDriveError("トークンの形式が正しくありません。");
+      setDriveError(t("login.tokenInvalid"));
       return;
     }
 
@@ -116,7 +118,7 @@ export default function Login() {
   if (!configLoaded) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-gray-500">Loading...</div>
+        <div className="text-gray-500">{t("app.loading")}</div>
       </div>
     );
   }
@@ -129,13 +131,13 @@ export default function Login() {
         {/* API接続セクション（config.json の enableApi=true の場合のみ表示） */}
         {enableApi && (
           <form onSubmit={handleLogin}>
-            <div className="text-sm font-medium text-gray-700 mb-2">API接続</div>
+            <div className="text-sm font-medium text-gray-700 mb-2">{t("login.apiConnection")}</div>
 
             {error && <div className="text-red-500 text-sm mb-3">{error}</div>}
 
             <input
               type="text"
-              placeholder="API URL (例: https://example.com/simplynote-api)"
+              placeholder={t("login.apiUrlPlaceholder")}
               value={apiBaseUrl}
               onChange={(e) => setApiBaseUrl(e.target.value)}
               className="w-full border rounded p-2 mb-3 focus:outline-none focus:ring focus:ring-blue-200"
@@ -143,14 +145,14 @@ export default function Login() {
 
             <input
               type="text"
-              placeholder="Username"
+              placeholder={t("login.username")}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full border rounded p-2 mb-3 focus:outline-none focus:ring focus:ring-blue-200"
             />
             <input
               type="password"
-              placeholder="Password"
+              placeholder={t("login.password")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full border rounded p-2 mb-4 focus:outline-none focus:ring focus:ring-blue-200"
@@ -158,7 +160,7 @@ export default function Login() {
             <button
               type="submit"
               className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition" >
-              Login
+              {t("login.loginButton")}
             </button>
           </form>
         )}
@@ -170,35 +172,35 @@ export default function Login() {
             {enableApi && (
               <div className="flex items-center my-4">
                 <div className="flex-1 border-t border-gray-300"></div>
-                <span className="px-3 text-gray-500 text-sm">または</span>
+                <span className="px-3 text-gray-500 text-sm">{t("login.or")}</span>
                 <div className="flex-1 border-t border-gray-300"></div>
               </div>
             )}
 
             <div>
-              <div className="text-sm font-medium text-gray-700 mb-2">Google Drive接続</div>
+              <div className="text-sm font-medium text-gray-700 mb-2">{t("login.driveConnection")}</div>
 
               {!hasClientId() ? (
                 <div className="text-red-500 text-sm mb-3">
-                  Client IDが設定されていません。環境変数 VITE_GOOGLE_CLIENT_ID を設定してください。
+                  {t("login.clientIdMissing")}
                 </div>
               ) : (
                 <>
                   <div className="text-sm text-gray-600 mb-3">
-                    <p className="font-medium mb-2">Step 1: Googleで認証</p>
+                    <p className="font-medium mb-2">{t("login.step1")}</p>
                     <button
                       type="button"
                       onClick={() => window.open(authUrl, '_blank')}
                       className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition"
                     >
-                      Googleアカウントで認証
+                      {t("login.authWithGoogle")}
                     </button>
                   </div>
 
                   <div className="text-sm text-gray-600 mb-3">
-                    <p className="font-medium mb-2">Step 2: 表示されたトークンを貼り付け</p>
+                    <p className="font-medium mb-2">{t("login.step2")}</p>
                     <textarea
-                      placeholder='{"access_token":"...","refresh_token":"...","expires_in":3600}'
+                      placeholder={t("login.tokenPlaceholder")}
                       value={driveTokenInput}
                       onChange={(e) => setDriveTokenInput(e.target.value)}
                       className="w-full border rounded p-2 text-sm focus:outline-none focus:ring focus:ring-green-200"
@@ -213,7 +215,7 @@ export default function Login() {
                     onClick={handleDriveConnect}
                     className="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600 transition"
                   >
-                    Google Driveに接続
+                    {t("login.connectDrive")}
                   </button>
                 </>
               )}
