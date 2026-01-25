@@ -1,11 +1,13 @@
 import { useEffect, useState, useRef } from "react";
-import { FilePlus, RefreshCcw, Clock, Trash2 } from "lucide-react";
+import { FilePlus, RefreshCcw, Clock, Trash2, Globe } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { getDataSource, clearDataSource } from "./dataSource";
 import type { Note, Tag, Attachment } from "./dataSource";
 import { basePath } from "./utils"
 import { msUntilDriveTokenExpiry, hasDriveRefreshToken, clearDriveToken } from "./drive/driveAuth"
 
 export default function App() {
+  const { t, i18n } = useTranslation();
 
   const loginUrl = basePath() + "/login";
   const ds = getDataSource();
@@ -47,7 +49,7 @@ export default function App() {
 
     const q = searchQuery.trim().toLowerCase();
 
-    const isTrash = note.tags?.some(t => t.toLowerCase() === "trash");
+    const isTrash = note.tags?.some(tag => tag.toLowerCase() === "trash");
 
     // ゴミ箱モードなら Trash のみ表示
     if (showTrashOnly) return isTrash;
@@ -73,7 +75,7 @@ export default function App() {
     const matchTags =
       tagsInQuery.length === 0 ||
       tagsInQuery.every(tag =>
-        note.tags?.some(t => t.toLowerCase() === tag)
+        note.tags?.some(tag => tag.toLowerCase() === tag)
       );
 
 
@@ -127,6 +129,24 @@ export default function App() {
   // --------------------
 
   const handleSelect = (note: Note) => {
+    // 新規作成中で内容がある場合、確認ダイアログを表示
+    if (isCreating && content.trim()) {
+      const confirmed = window.confirm(t("confirm.unsavedNew"));
+      if (!confirmed) return;
+    }
+
+    // 既存ノートに未保存の変更がある場合も確認
+    if (selected && unsavedNoteIds.includes(selected.id)) {
+      const confirmed = window.confirm(t("confirm.unsavedChanges"));
+      if (!confirmed) return;
+    }
+
+    // 保存タイマーをキャンセル
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+
     setIsCreating(false);
     setSelected(note);
   };
@@ -380,7 +400,7 @@ export default function App() {
 
     } catch (err) {
       console.error(err);
-      alert("ノート一覧の取得に失敗しました。");
+      alert(t("errors.fetchNotes"));
     } finally {
       setIsLoading(false);
     }
@@ -399,12 +419,23 @@ export default function App() {
 
     } catch (err) {
       console.error(err);
-      alert("タグ一覧の取得に失敗しました。");
+      alert(t("errors.fetchTags"));
     }
   };
 
   // 新規作成（空ノートを開く）
   const handleNew = () => {
+    // 既存ノートに未保存の変更がある場合、確認ダイアログを表示
+    if (selected && unsavedNoteIds.includes(selected.id)) {
+      const confirmed = window.confirm(t("confirm.unsavedNewNote"));
+      if (!confirmed) return;
+
+      // 保存タイマーをキャンセル
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+    }
 
     setIsCreating(true);
     setSelected(null);
@@ -421,7 +452,7 @@ export default function App() {
       saveTimer.current = null;
     }
 
-    const newTitle = title.trim() || content.split("\n")[0].slice(0, 30) || "New Note...";
+    const newTitle = title.trim() || content.split("\n")[0].slice(0, 30) || t("notes.newNote");
 
     setIsSavingNew(true);
 
@@ -436,7 +467,7 @@ export default function App() {
 
     } catch (err) {
       console.error("Failed to create note:", err);
-      alert("ノートの作成に失敗しました。");
+      alert(t("errors.createNote"));
     } finally {
       setIsSavingNew(false);
     }
@@ -470,7 +501,7 @@ export default function App() {
         console.error("Save failed:", err);
         // 失敗時は未保存フラグを戻す
         setUnsavedNoteIds((prev) => [...prev, noteId]);
-        alert("保存に失敗しました。");
+        alert(t("errors.saveFailed"));
       });
   };
 
@@ -478,9 +509,9 @@ export default function App() {
   const handleRemove = async () => {
 
     if (!selected || !selected.id) return;
-    if (selected.tags?.some(t => t.toLowerCase() === "trash")) return;
+    if (selected.tags?.some(tag => tag.toLowerCase() === "trash")) return;
 
-    if (!confirm("このノートをゴミ箱に移動しますか？")) return;
+    if (!confirm(t("confirm.moveToTrash"))) return;
 
     await handleAddTag( selected.id, "Trash" );
   }
@@ -489,7 +520,7 @@ export default function App() {
   const handleDelete = () => {
 
     if (!selected || !selected.id) return;
-    if (!confirm("このノートを削除しますか？")) return;
+    if (!confirm(t("confirm.deleteNote"))) return;
 
     const deletedNote = selected;
     const currentNotes = [...notes];
@@ -505,7 +536,7 @@ export default function App() {
         // ロールバック
         setNotes(currentNotes);
         setSelected(deletedNote);
-        alert("削除に失敗しました。");
+        alert(t("errors.deleteFailed"));
       });
   };
 
@@ -537,7 +568,7 @@ export default function App() {
 
     } catch (err) {
       console.error(err);
-      alert("保存に失敗しました。");
+      alert(t("errors.saveFailed"));
     } finally {
       setUploadProgress(null);
     }
@@ -547,7 +578,7 @@ export default function App() {
   const handleDeleteAttachment = (attachmentId: number, filename: string) => {
 
     if (!selected) return;
-    if (!confirm(`「${filename}」を削除しますか？`)) return;
+    if (!confirm(`${t("actions.delete")} "${filename}"?`)) return;
 
     // 現在の添付ファイル一覧を保存（ロールバック用）
     const currentAttachments = [...attachments];
@@ -562,7 +593,7 @@ export default function App() {
         console.error("Attachment delete failed:", err);
         // ロールバック
         setAttachments(currentAttachments);
-        alert("添付ファイルの削除に失敗しました。");
+        alert(t("errors.deleteAttachment"));
       });
   };
 
@@ -690,7 +721,7 @@ export default function App() {
 
     } catch (err) {
       console.error(err);
-      alert("Import failed.");
+      alert(t("errors.importFailed"));
     } finally {
       e.target.value = "";
     }
@@ -715,7 +746,7 @@ export default function App() {
 
     } catch (err) {
       console.error(err);
-      alert("エクスポートに失敗しました。");
+      alert(t("errors.exportFailed"));
     }
   };
 
@@ -847,14 +878,14 @@ export default function App() {
             <button
               onClick={() => setShowMenu(!showMenu)}
               className="px-2 py-1 text-gray-600 hover:text-gray-900"
-              title="メニュー"
+              title={t("menu.title")}
             >
               ☰
             </button>
 
             {/* All Notes + 件数 */}
             <h2 className="font-semibold text-lg flex items-baseline">
-              <span>Notes</span>
+              <span>{t("menu.allNotes")}</span>
               <span className="ml-2 text-sm text-gray-500">
                 ({filteredNotes.length})
               </span>
@@ -870,16 +901,16 @@ export default function App() {
                 <button
                   disabled={isEmptyingTrash}
                   onClick={async () => {
-                    if (!confirm("ゴミ箱を空にしますか？この操作は取り消せません。")) return;
+                    if (!confirm(t("confirm.emptyTrash"))) return;
                     setIsEmptyingTrash(true);
                     try {
                       const result = await withAuthRetry(() => ds.emptyTrash());
-                      alert(`${result.deleted}件のノートを削除しました。`);
+                      alert(t("confirm.deletedNotes", { count: result.deleted }));
                       fetchNotes();
                       fetchTags();
                     } catch (err) {
                       console.error(err);
-                      alert("ゴミ箱を空にできませんでした。");
+                      alert(t("errors.emptyTrash"));
                     } finally {
                       setIsEmptyingTrash(false);
                     }
@@ -889,7 +920,7 @@ export default function App() {
                       ? "bg-red-400 text-white cursor-wait"
                       : "bg-red-600 text-white hover:bg-red-700"
                   }`}
-                  title="Empty Trash"
+                  title={t("menu.emptyTrash")}
                 >
                   {isEmptyingTrash ? (
                     <RefreshCcw className="w-4 h-4 animate-spin" />
@@ -903,7 +934,7 @@ export default function App() {
               <button
                 onClick={handleNew}
                 className="bg-green-500 text-white px-2 py-2 rounded hover:bg-green-600"
-                title="New Note"
+                title={t("notes.new")}
               >
                 <FilePlus className="w-4 h-4" />
               </button>
@@ -932,7 +963,7 @@ export default function App() {
                   localStorage.setItem("autoRefreshOnFocus", String(newValue));
                 }}
               >
-                <span>🔄 Auto Refresh</span>
+                <span>🔄 {t("menu.autoRefresh")}</span>
                 <span className={`ml-2 text-xs px-2 py-0.5 rounded ${
                   autoRefreshOnFocus
                     ? "bg-green-100 text-green-700"
@@ -952,7 +983,7 @@ export default function App() {
                   setShowMenu(false);
                 }}
               >
-                📂 Import ZIP Archive
+                📂 {t("menu.import")}
               </button>
 
               <button
@@ -962,8 +993,39 @@ export default function App() {
                   setShowMenu(false);
                 }}
               >
-                💾 Export ZIP Archive
+                💾 {t("menu.export")}
               </button>
+
+              <hr className="my-1 border-gray-200" />
+
+              <div className="px-4 py-2">
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm text-gray-600">{t("language.label")}</span>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    className={`px-3 py-1 text-sm rounded ${
+                      i18n.language === "en"
+                        ? "bg-blue-500 text-white"
+                        : "bg-gray-200 hover:bg-gray-300"
+                    }`}
+                    onClick={() => i18n.changeLanguage("en")}
+                  >
+                    {t("language.en")}
+                  </button>
+                  <button
+                    className={`px-3 py-1 text-sm rounded ${
+                      i18n.language === "ja"
+                        ? "bg-blue-500 text-white"
+                        : "bg-gray-200 hover:bg-gray-300"
+                    }`}
+                    onClick={() => i18n.changeLanguage("ja")}
+                  >
+                    {t("language.ja")}
+                  </button>
+                </div>
+              </div>
 
             </div>
           )}
@@ -974,7 +1036,7 @@ export default function App() {
 
           <input
             type="text"
-            placeholder="Filter by text / #tag..."
+            placeholder={t("notes.filterPlaceholder")}
             value={searchQuery}
             onChange={(e) => {
               const v = e.target.value;
@@ -1125,7 +1187,7 @@ export default function App() {
             onClick={handleLogout}
             className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
           >
-            Logout
+            {t("menu.logout")}
           </button>
 
           {/* 右：Trashボタン */}
@@ -1136,7 +1198,7 @@ export default function App() {
               showTrashOnly ? "bg-red-500 text-white" : "bg-gray-200 hover:bg-gray-300"
             }`}
           >
-            <Trash2 className="w-4 h-4" /> TrashBox
+            <Trash2 className="w-4 h-4" /> {t("menu.trash")}
           </button>
         </div>
 
@@ -1151,7 +1213,7 @@ export default function App() {
           <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-10">
             <div className="text-gray-500 flex items-center gap-2">
               <RefreshCcw className="w-5 h-5 animate-spin" />
-              <span>読み込み中...</span>
+              <span>{t("app.loading")}</span>
             </div>
           </div>
         )}
@@ -1214,11 +1276,11 @@ export default function App() {
                 {selected && (
                   showTrashOnly ? (
                     <button tabIndex={-1} onClick={handleDelete} className="text-red-600 hover:text-red-800">
-                      🗑️ Delete Permanently
+                      🗑️ {t("actions.deletePermanently")}
                     </button>
                   ) : (
                     <button tabIndex={-1} onClick={handleRemove} className="text-red-600 hover:text-red-800">
-                      🗑️ Trash
+                      🗑️ {t("menu.trash")}
                     </button>
                   )
                 )}
@@ -1251,7 +1313,7 @@ export default function App() {
                   // フォーカスが外れたらキャンセル（入力だけクリア）
                   setNewTagInput("");
                 }}
-                placeholder="Add tag..."
+                placeholder={t("notes.addTagPlaceholder")}
                 className="border rounded px-2 py-1 text-sm w-25 text-center focus:outline-none focus:ring-1 focus:ring-blue-400" />
 
               {/* タグ一覧 */}
@@ -1287,7 +1349,7 @@ export default function App() {
               className="w-full h-full rounded p-2 focus:outline-none"
               value={content}
               onChange={handleChange}
-              placeholder="Write your note here..."
+              placeholder={t("notes.writePlaceholder")}
               autoFocus
             />
         </div>
@@ -1297,7 +1359,7 @@ export default function App() {
 
           <div className="flex items-center justify-start flex-wrap gap-3 mb-2">
 
-            <span className="font-semibold text-sm">Attachments</span>
+            <span className="font-semibold text-sm">{t("attachments.title")}</span>
 
             {/* 見た目用のカスタムボタン */}
             {selected && (
@@ -1305,7 +1367,7 @@ export default function App() {
                 htmlFor="fileInput"
                 className="bg-gray-200 text-gray-800 text-sm px-2 py-0.5 rounded cursor-pointer hover:bg-gray-300"
               >
-                📁 ファイル選択
+                📁 {t("attachments.selectFile")}
               </label>
             )}
 
@@ -1325,7 +1387,7 @@ export default function App() {
             {/* 選択状態の表示 */}
             {draftFiles.length > 0 && (
               <span className="text-sm text-gray-600">
-                { `${draftFiles.length} file(s) pending upload` }
+                {t("attachments.pendingUpload", { count: draftFiles.length })}
               </span>
             )}
           </div>
@@ -1340,7 +1402,7 @@ export default function App() {
                   <button
                     onClick={() => handleDeleteAttachment(f.id, f.filename)}
                     className="mr-2 px-2 py-0.5 rounded cursor-pointer hover:bg-red-500"
-                    title="Delete">
+                    title={t("actions.delete")}>
                     🗑️
                   </button>
 
@@ -1401,51 +1463,52 @@ export default function App() {
         {/* フッター */}
         <div className="p-3 border-t flex justify-between items-center min-h-[58px]">
 
-          {/* 左：作成日時・更新日時 */}
-          <div className="text-sm text-gray-500">
+          {/* 左：Saveボタン */}
+          <div>
+            {isCreating && localStorage.getItem("backend") === "drive" ? (
+              // Google Drive接続時のみ新規ノートのSaveボタンを表示（API接続時は自動保存）
+              <button
+                onClick={handleSaveNewNote}
+                disabled={!content.trim() || isSavingNew}
+                className={`px-3 py-1 rounded flex items-center gap-2 ${
+                  isSavingNew
+                    ? "bg-green-400 text-white cursor-wait"
+                    : content.trim()
+                      ? "bg-green-500 text-white hover:bg-green-600"
+                      : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                }`}>
+                {isSavingNew ? (
+                  <>
+                    <RefreshCcw className="w-4 h-4 animate-spin" />
+                    {t("actions.saving")}
+                  </>
+                ) : (
+                  <>💾 {t("actions.saveNewNote")}</>
+                )}
+              </button>
+            ) : !unsavedNoteIds.includes(selected?.id ?? -1) ? (
+              <div className="px-3 py-1"> </div>
+            ) : (
+              <button
+                onClick={() => handleSave()}
+                className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
+                💾 {t("actions.save")}
+              </button>
+            )}
+          </div>
+
+          {/* 右：作成日時・更新日時（2行） */}
+          <div className="text-xs text-gray-500 text-right leading-tight">
             {!isCreating && selected && (() => {
               const currentNote = notes.find(n => n.id === selected.id);
               return (
                 <>
-                  <span>Created: {currentNote?.created_at ? new Date(currentNote.created_at).toLocaleString() : "-"}</span>
-                  <span className="mx-3">|</span>
-                  <span>Updated: {currentNote?.updated_at ? new Date(currentNote.updated_at).toLocaleString() : "-"}</span>
+                  <div>{t("timestamps.created")}: {currentNote?.created_at ? new Date(currentNote.created_at).toLocaleString() : "-"}</div>
+                  <div>{t("timestamps.updated")}: {currentNote?.updated_at ? new Date(currentNote.updated_at).toLocaleString() : "-"}</div>
                 </>
               );
             })()}
           </div>
-
-          {/* 右：Saveボタン */}
-          {isCreating && localStorage.getItem("backend") === "drive" ? (
-            // Google Drive接続時のみ新規ノートのSaveボタンを表示（API接続時は自動保存）
-            <button
-              onClick={handleSaveNewNote}
-              disabled={!content.trim() || isSavingNew}
-              className={`px-3 py-1 rounded flex items-center gap-2 ${
-                isSavingNew
-                  ? "bg-green-400 text-white cursor-wait"
-                  : content.trim()
-                    ? "bg-green-500 text-white hover:bg-green-600"
-                    : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}>
-              {isSavingNew ? (
-                <>
-                  <RefreshCcw className="w-4 h-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>💾 New Note</>
-              )}
-            </button>
-          ) : !unsavedNoteIds.includes(selected?.id ?? -1) ? (
-            <div className="px-3 py-1"> </div>
-          ) : (
-            <button
-              onClick={() => handleSave()}
-              className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
-              💾 Save
-            </button>
-          )}
         </div>
 
       </div>

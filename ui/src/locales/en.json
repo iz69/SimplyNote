@@ -1,0 +1,68 @@
+{
+  "app": {
+    "title": "SimplyNote",
+    "loading": "Loading..."
+  },
+  "menu": {
+    "title": "Menu",
+    "allNotes": "All Notes",
+    "starred": "Starred",
+    "trash": "Trash",
+    "emptyTrash": "Empty Trash",
+    "autoRefresh": "Auto Refresh",
+    "logout": "Logout",
+    "import": "Import",
+    "export": "Export"
+  },
+  "notes": {
+    "new": "New Note",
+    "newNote": "New Note...",
+    "untitled": "Untitled",
+    "filterPlaceholder": "Filter by text / #tag...",
+    "writePlaceholder": "Write your note here...",
+    "addTagPlaceholder": "Add tag..."
+  },
+  "actions": {
+    "save": "Save",
+    "saveNewNote": "New Note",
+    "saving": "Saving...",
+    "delete": "Delete",
+    "deletePermanently": "Delete Permanently",
+    "restore": "Restore"
+  },
+  "attachments": {
+    "title": "Attachments",
+    "delete": "Delete",
+    "selectFile": "Select File",
+    "pendingUpload": "{{count}} file(s) pending upload"
+  },
+  "timestamps": {
+    "created": "Created",
+    "updated": "Updated"
+  },
+  "confirm": {
+    "unsavedNew": "You have unsaved notes. Discard and switch to another note?",
+    "unsavedChanges": "You have unsaved changes. Discard and switch to another note?",
+    "unsavedNewNote": "You have unsaved changes. Discard and create a new note?",
+    "moveToTrash": "Move this note to trash?",
+    "deleteNote": "Delete this note permanently?",
+    "emptyTrash": "Empty trash? This cannot be undone.",
+    "deletedNotes": "{{count}} note(s) deleted."
+  },
+  "errors": {
+    "fetchNotes": "Failed to fetch notes.",
+    "fetchTags": "Failed to fetch tags.",
+    "createNote": "Failed to create note.",
+    "saveFailed": "Failed to save.",
+    "deleteFailed": "Failed to delete.",
+    "deleteAttachment": "Failed to delete attachment.",
+    "importFailed": "Import failed.",
+    "exportFailed": "Export failed.",
+    "emptyTrash": "Failed to empty trash."
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "ja": "日本語"
+  }
+}

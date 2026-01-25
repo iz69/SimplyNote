@@ -1,0 +1,68 @@
+{
+  "app": {
+    "title": "SimplyNote",
+    "loading": "読み込み中..."
+  },
+  "menu": {
+    "title": "メニュー",
+    "allNotes": "すべてのノート",
+    "starred": "スター付き",
+    "trash": "ゴミ箱",
+    "emptyTrash": "ゴミ箱を空にする",
+    "autoRefresh": "自動更新",
+    "logout": "ログアウト",
+    "import": "インポート",
+    "export": "エクスポート"
+  },
+  "notes": {
+    "new": "新規ノート",
+    "newNote": "新規ノート...",
+    "untitled": "無題",
+    "filterPlaceholder": "テキスト / #タグ で絞り込み...",
+    "writePlaceholder": "ここにノートを入力...",
+    "addTagPlaceholder": "タグを追加..."
+  },
+  "actions": {
+    "save": "保存",
+    "saveNewNote": "新規ノート",
+    "saving": "保存中...",
+    "delete": "削除",
+    "deletePermanently": "完全に削除",
+    "restore": "復元"
+  },
+  "attachments": {
+    "title": "添付ファイル",
+    "delete": "削除",
+    "selectFile": "ファイル選択",
+    "pendingUpload": "{{count}}件のファイルがアップロード待ち"
+  },
+  "timestamps": {
+    "created": "作成日時",
+    "updated": "更新日時"
+  },
+  "confirm": {
+    "unsavedNew": "未保存のノートがあります。破棄して別のノートに移動しますか？",
+    "unsavedChanges": "未保存の変更があります。破棄して別のノートに移動しますか？",
+    "unsavedNewNote": "未保存の変更があります。破棄して新規ノートを作成しますか？",
+    "moveToTrash": "このノートをゴミ箱に移動しますか？",
+    "deleteNote": "このノートを削除しますか？",
+    "emptyTrash": "ゴミ箱を空にしますか？この操作は取り消せません。",
+    "deletedNotes": "{{count}}件のノートを削除しました。"
+  },
+  "errors": {
+    "fetchNotes": "ノート一覧の取得に失敗しました。",
+    "fetchTags": "タグ一覧の取得に失敗しました。",
+    "createNote": "ノートの作成に失敗しました。",
+    "saveFailed": "保存に失敗しました。",
+    "deleteFailed": "削除に失敗しました。",
+    "deleteAttachment": "添付ファイルの削除に失敗しました。",
+    "importFailed": "インポートに失敗しました。",
+    "exportFailed": "エクスポートに失敗しました。",
+    "emptyTrash": "ゴミ箱を空にできませんでした。"
+  },
+  "language": {
+    "label": "言語",
+    "en": "English",
+    "ja": "日本語"
+  }
+}
