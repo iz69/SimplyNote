@@ -36,7 +36,7 @@ I wanted a Simplenote-like experience where I truly own my data. SimplyNote allo
 Copyright (c) 2025 Kuromaru Soft
 - **Free for personal and non-commercial use.**
 - **Commercial use is prohibited** without prior permission (this includes business use, resale, or integration into paid services).
-- For commercial inquiries, please contact: `kuro.maru.202301@gmail.com`
+- For commercial inquiries, please contact.
 
 本ソフトウェアは、個人または非商用目的に限り、無償で使用・改変・再配布を許可します。<br/>
 商用目的（直接・間接を問わず利益を得る目的）での利用は禁止します。<br/>
@@ -47,9 +47,7 @@ Copyright (c) 2025 Kuromaru Soft
 - 企業・組織での業務利用（社内利用を含む）
 - 本ソフトウェアを利用したホスティング/運用代行の提供
 
-商用利用を希望する場合は、下記へご連絡ください。<br/>
-CONTACT: kuro.maru.202301@gmail.com<br/>
-
+商用利用を希望する場合はご連絡ください。<br/>
 本ソフトウェアは現状のまま提供され、いかなる保証もありません。<br/>
 作者は本ソフトウェアの利用により生じた損害について責任を負いません。<br/>
 
