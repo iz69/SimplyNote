@@ -1,5 +1,7 @@
 data/
 compose.yml
+docker-compose-develop.yml
+
 ui/public/config.json
 
 # Logs

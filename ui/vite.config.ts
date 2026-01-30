@@ -7,8 +7,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const hostName = env.VITE_HOST_NAME || 'localhost'
 
+  const basePath = env.VITE_BASE_PATH || '/'
+
   return {
-    base: '/',
+//    base: '/',
+    base: basePath,
     publicDir: 'public',
     plugins: [react()],
 

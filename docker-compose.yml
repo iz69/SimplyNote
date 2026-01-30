@@ -1,52 +1,30 @@
 services:
 
-  simplynote-api:
+  api:
     container_name: simplynote-api
-    restart: always
     ports:
       - "18888:8000"
-##    build: ./api                           # comment for Dev
-##    volumes:                               # comment for Dev
-##      - ./api/data:/data                   # comment for Dev
+    restart: always
     environment:
       TZ: Asia/Tokyo
-      ADMIN_USER: admin
-      ADMIN_PASS: password
+      ADMIN_USER: admin                      # for My Setting
+      ADMIN_PASS: password                   # for My Setting
       BASE_PATH: /simplynote-api
-
-    # ----------------------------------------------------------
-    # for Develop
-    # ----------------------------------------------------------
+      NODE_OPTIONS: --max-old-space-size=256
+    build: ./api
     volumes:
-      - ./api/src:/api
       - ./api/data:/data
-      - ./api/requirements.txt:/requirements.txt
-    image: python:3.12-slim
-    working_dir: /
-    command: >
-      sh -c "pip install -r requirements.txt &&
-             uvicorn api.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=\"*\""
 
-  # ----------------------------------------------------------
-
-  simplynote-ui:
+  ui:
     container_name: simplynote-ui
-    restart: always
     ports:
       - "15173:5173"
-    environment:
-      - VITE_HOST_NAME=myhost.example.com
-##    build: ./ui                                # comment for Dev
-##    volumes:
-##      - ./ui/config.json:/ui/dist/config.json  # comment for Dev
-
-    # ----------------------------------------------------------
-    # for Develop
-    # ----------------------------------------------------------
-    image: node:20
+    restart: always
+    build:
+      context: ./ui
+      args:
+        VITE_HOST_NAME: www.example.com
+        VITE_BASE_PATH: /simplynote/
     volumes:
-      - ./ui:/ui
-    working_dir: /ui
-    command: >
-      sh -c "npm install && npm run dev -- --host 0.0.0.0"
+      - ./ui/config.json:/usr/share/nginx/html/config.json:ro
 
