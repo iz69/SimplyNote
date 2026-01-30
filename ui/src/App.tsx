@@ -74,10 +74,9 @@ export default function App() {
     // タグ一致（すべてのタグを含む）
     const matchTags =
       tagsInQuery.length === 0 ||
-      tagsInQuery.every(tag =>
-        note.tags?.some(tag => tag.toLowerCase() === tag)
+      tagsInQuery.every(queryTag =>
+        note.tags?.some(noteTag => noteTag.toLowerCase() === queryTag.toLowerCase())
       );
-
 
     // 両方をANDで評価
     return matchTags && matchText;
