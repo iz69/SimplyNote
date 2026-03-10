@@ -7,7 +7,7 @@ from ..database import get_connection
 from ..models import NoteCreate, NoteUpdate, NoteOut
 from ..auth import get_current_user, oauth2_scheme
 from ..config import load_config
-from ..utils import normalize_newlines
+from ..utils import normalize_newlines, parse_important_flag
 from ..services.maintenance import run_maintenance
 
 router = APIRouter(prefix="/notes", tags=["notes"])
@@ -51,6 +51,7 @@ def get_notes(request: Request, tag: Optional[str] = None, token: str = Depends(
     notes = []
     for row in cur.fetchall():
         d = dict(row)
+        d["is_important"] = parse_important_flag(d.get("is_important"))
         d["tags"] = d["tags"].split(",") if d["tags"] else []
 
         # 添付ファイル
@@ -99,7 +100,7 @@ def get_note(note_id: int, request: Request, token: str = Depends(oauth2_scheme)
     d = dict(row)
 
     # 重要マーク
-    d["is_important"] = int(d["is_important"])
+    d["is_important"] = parse_important_flag(d.get("is_important"))
 
     # タグ
     d["tags"] = d["tags"].split(",") if d["tags"] else []

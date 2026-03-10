@@ -9,6 +9,7 @@ from .config import load_config
 from .routers import notes, attachments, tags, import_export
 from .routers.notes import delete_notes_and_attachments
 from .services.maintenance import run_maintenance
+from .utils import TRASH_TAG_NAME
 
 import os
 import logging
@@ -131,8 +132,8 @@ def empty_trash(
         FROM notes n
         JOIN note_tags nt ON nt.note_id = n.id
         JOIN tags t ON t.id = nt.tag_id
-        WHERE n.user_id = ? AND upper(t.name) = upper(?)
-    """, (user_id, "trash"))
+        WHERE n.user_id = ? AND upper(t.name) = ?
+    """, (user_id, TRASH_TAG_NAME))
     note_ids = [row[0] for row in cur.fetchall()]
 
     deleted, files = delete_notes_and_attachments(conn, cur, user_id, note_ids)

@@ -2,6 +2,7 @@ import logging
 
 from ..database import get_connection
 from ..config import load_config
+from ..utils import TRASH_TAG_NAME
 
 config = load_config()
 logger = logging.getLogger("maintenance")
@@ -22,11 +23,11 @@ def purge_expired_trashed_notes(cur, user_id=None):
                     SELECT n.id FROM notes n
                     JOIN note_tags nt ON n.id = nt.note_id
                     JOIN tags t ON nt.tag_id = t.id
-                    WHERE t.name = 'Trash'
+                    WHERE upper(t.name) = ?
                       AND n.user_id = ?
                       AND n.updated_at < datetime('now', ?)
                 )
-            """, (user_id, f'-{days} days'))
+            """, (TRASH_TAG_NAME, user_id, f'-{days} days'))
 
         else:
             cur.execute("""
@@ -35,10 +36,10 @@ def purge_expired_trashed_notes(cur, user_id=None):
                     SELECT n.id FROM notes n
                     JOIN note_tags nt ON n.id = nt.note_id
                     JOIN tags t ON nt.tag_id = t.id
-                    WHERE t.name = 'Trash'
+                    WHERE upper(t.name) = ?
                       AND n.updated_at < datetime('now', ?)
                 )
-            """, (f'-{days} days',))
+            """, (TRASH_TAG_NAME, f'-{days} days'))
 
         cnt = cur.rowcount or 0
         if cnt > 0:

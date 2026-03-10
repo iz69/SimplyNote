@@ -10,7 +10,7 @@ import logging
 from ..database import get_connection
 from ..auth import get_current_user, oauth2_scheme
 from ..config import load_config
-from ..utils import normalize_newlines, sanitize_filename
+from ..utils import normalize_newlines, sanitize_filename, parse_important_flag
 
 router = APIRouter(tags=["import_export"])
 config = load_config()
@@ -87,7 +87,7 @@ async def import_notes(file: UploadFile = File(...), token: str = Depends(oauth2
                         tags = [t.strip() for t in tag_line.split(",") if t.strip()]
                     if line.startswith("Important:"):
                         val = line.replace("Important:", "", 1).strip().lower()
-                        is_important = val
+                        is_important = parse_important_flag(val)
 
             # タイトル重複チェック
             cur.execute("SELECT id FROM notes WHERE user_id=? AND title=?", (user_id, title))

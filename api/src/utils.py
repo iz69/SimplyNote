@@ -20,6 +20,21 @@ def normalize_tag_name(name: str) -> str:
     return normalized.strip().upper()
 
 
+TRASH_TAG_NAME = "TRASH"
+
+
+def parse_important_flag(value) -> int:
+    """Parse import metadata into the integer flag stored in the DB."""
+    if isinstance(value, bool):
+        return 1 if value else 0
+
+    if isinstance(value, int):
+        return 1 if value else 0
+
+    normalized = str(value or "").strip().lower()
+    return 1 if normalized in {"1", "true", "yes", "on"} else 0
+
+
 def sanitize_filename(name: str, maxlen: int = 100) -> str:
     """
     圧縮ファイル名の正規化

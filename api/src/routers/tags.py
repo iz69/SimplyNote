@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 
 from ..database import get_connection
 from ..auth import get_current_user, oauth2_scheme
-from ..utils import normalize_tag_name
+from ..utils import normalize_tag_name, TRASH_TAG_NAME
 from ..services.maintenance import run_maintenance
 
 router = APIRouter(tags=["tags"])
@@ -114,11 +114,11 @@ def get_all_tags(token: str = Depends(oauth2_scheme)):
               SELECT nt2.note_id
               FROM note_tags nt2
               JOIN tags t2 ON nt2.tag_id = t2.id
-              WHERE LOWER(t2.name) = 'trash'
+              WHERE UPPER(t2.name) = ?
           )
         GROUP BY t.id
         ORDER BY t.name COLLATE NOCASE
-    """, (user_id,))
+    """, (user_id, TRASH_TAG_NAME))
 
     tags = [{"name": row[0], "note_count": row[1]} for row in cur.fetchall()]
 
