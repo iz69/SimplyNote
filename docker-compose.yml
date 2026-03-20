@@ -4,7 +4,7 @@ services:
     container_name: simplynote-api
     ports:
       - "18888:8000"
-    restart: always
+    restart: unless-stopped
     environment:
       TZ: Asia/Tokyo
       ADMIN_USER: admin                      # for My Setting
@@ -19,7 +19,7 @@ services:
     container_name: simplynote-ui
     ports:
       - "15173:5173"
-    restart: always
+    restart: unless-stopped
     build:
       context: ./ui
       args:
