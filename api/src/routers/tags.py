@@ -4,6 +4,7 @@ from ..database import get_connection
 from ..auth import get_current_user, oauth2_scheme
 from ..utils import normalize_tag_name, TRASH_TAG_NAME
 from ..services.maintenance import run_maintenance
+from ..services.tombstones import add_note_tombstone
 
 router = APIRouter(tags=["tags"])
 
@@ -17,8 +18,9 @@ def add_tag(note_id: int, tag: dict, token: str = Depends(oauth2_scheme)):
     current_user = get_current_user(token)
     user_id = current_user["id"]
 
-    cur.execute("SELECT id FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
-    if not cur.fetchone():
+    cur.execute("SELECT id, title, content FROM notes WHERE id=? AND user_id=?", (note_id, user_id))
+    note_row = cur.fetchone()
+    if not note_row:
         conn.close()
         raise HTTPException(status_code=404, detail="Note not found")
 
@@ -35,6 +37,9 @@ def add_tag(note_id: int, tag: dict, token: str = Depends(oauth2_scheme)):
 
     # note_tags 関連付け
     cur.execute("INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?, ?)", (note_id, tag_id))
+
+    if tag_name == TRASH_TAG_NAME:
+        add_note_tombstone(cur, user_id, note_row["title"], note_row["content"], note_id)
 
     conn.commit()
 

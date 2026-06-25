@@ -1,10 +1,28 @@
 import unicodedata
 import re
+import hashlib
 
 
 def normalize_newlines(text: str) -> str:
     """改行コードの正規化"""
     return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def note_fingerprint(title: str, content: str) -> str:
+    """本文を保存せず、削除済みノートの再作成検出に使う指紋を作る。"""
+    normalized_title = title or ""
+    normalized_content = normalize_newlines(content or "")
+    h = hashlib.sha256()
+    h.update(normalized_title.encode("utf-8"))
+    h.update(b"\0")
+    h.update(normalized_content.encode("utf-8"))
+    return h.hexdigest()
+
+
+def note_content_fingerprint(content: str) -> str:
+    """タイトルだけ変形して再送された削除済みノートを検出する。"""
+    normalized_content = normalize_newlines(content or "")
+    return hashlib.sha256(normalized_content.encode("utf-8")).hexdigest()
 
 
 def normalize_tag_name(name: str) -> str:

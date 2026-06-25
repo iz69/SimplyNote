@@ -311,7 +311,7 @@ export default function App() {
             // 保存失敗時も未保存マークは残す（ユーザーに再試行の機会を与える）
           });
 
-        } else if (value.trim() !== "") {
+        } else if (isCreating && value.trim() !== "") {
           // Google Drive接続時は新規ノートの自動保存をしない（Save New Noteボタンで保存）
           if (backend === "drive") return;
 
@@ -512,6 +512,12 @@ export default function App() {
 
     if (!confirm(t("confirm.moveToTrash"))) return;
 
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    setUnsavedNoteIds((prev) => prev.filter((id) => id !== selected.id));
+
     await handleAddTag( selected.id, "Trash" );
   }
 
@@ -523,6 +529,12 @@ export default function App() {
 
     const deletedNote = selected;
     const currentNotes = [...notes];
+
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    setUnsavedNoteIds((prev) => prev.filter((id) => id !== deletedNote.id));
 
     // 楽観的更新: UIから即座に削除
     setNotes((prev) => prev.filter((n) => n.id !== deletedNote.id));
@@ -1227,6 +1239,7 @@ export default function App() {
               type="text"
               className="font-semibold text-lg border-gray-300 focus:outline-none focus:border-blue-400 flex-grow mr-2"
               value={title}
+              disabled={!selected && !isCreating}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={(e) => {
                 const value = e.currentTarget.value
@@ -1348,6 +1361,7 @@ export default function App() {
               className="w-full h-full rounded p-2 focus:outline-none"
               value={content}
               onChange={handleChange}
+              disabled={!selected && !isCreating}
               placeholder={t("notes.writePlaceholder")}
               autoFocus
             />

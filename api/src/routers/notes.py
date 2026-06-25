@@ -9,6 +9,7 @@ from ..auth import get_current_user, oauth2_scheme
 from ..config import load_config
 from ..utils import normalize_newlines, parse_important_flag
 from ..services.maintenance import run_maintenance
+from ..services.tombstones import add_note_tombstone, note_tombstone_exists
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 config = load_config()
@@ -137,6 +138,10 @@ def create_note(note: NoteCreate, token: str = Depends(oauth2_scheme)):
 
     # 改行コードの正規化
     content = normalize_newlines(note.content)
+
+    if note_tombstone_exists(cur, user_id, note.title, content):
+        conn.close()
+        raise HTTPException(status_code=409, detail="Note was previously deleted")
 
     cur.execute(
         "INSERT INTO notes (user_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
@@ -306,6 +311,13 @@ def _delete_notes_and_attachments(conn, cur, user_id: int, note_ids: list[int]):
         note_ids,
     )
     files = [row[0] for row in cur.fetchall()]
+
+    cur.execute(
+        f"SELECT id, title, content FROM notes WHERE user_id=? AND id IN ({placeholders})",
+        [user_id, *note_ids],
+    )
+    for row in cur.fetchall():
+        add_note_tombstone(cur, user_id, row["title"], row["content"], row["id"])
 
     # attachments -> notes の順で削除
     cur.execute(
