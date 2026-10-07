@@ -2,8 +2,6 @@
 
 UI・APIをGHCRへ配布する。公開用Composeにビルド指定はなく、配置先にソース一式は不要。
 対応プラットフォームは `linux/amd64`。
-初回公開には、この変更をGitHubへ反映し、バージョンタグをpushする必要がある。
-初回公開前の動作確認は、下記のソースビルド用Composeを使う。
 
 | イメージ | 内容 |
 | --- | --- |
@@ -13,12 +11,12 @@ UI・APIをGHCRへ配布する。公開用Composeにビルド指定はなく、�
 ## 導入と設定
 
 公開済みリリースの `docker-compose.yml` と `.env.example` を同じディレクトリへ置く。
-以下の `v1.1.0` は実際に公開されたリリースタグに置き換える。
+以下の `v1.1.1` は使用するリリースタグに置き換える。
 
 ```sh
 mkdir simplynote
 cd simplynote
-SIMPLYNOTE_RELEASE=v1.1.0
+SIMPLYNOTE_RELEASE=v1.1.1
 curl -fL "https://raw.githubusercontent.com/iz69/SimplyNote/${SIMPLYNOTE_RELEASE}/docker-compose.yml" -o docker-compose.yml
 curl -fL "https://raw.githubusercontent.com/iz69/SimplyNote/${SIMPLYNOTE_RELEASE}/.env.example" -o .env.example
 cp .env.example .env
@@ -30,14 +28,14 @@ cp .env.example .env
 | --- | --- |
 | `UI_BASE_PATH` | UIの公開パス。既定は `/simplynote/` |
 | `API_BASE_PATH` | APIの公開パス。既定は `/simplynote-api` |
-| `SIMPLYNOTE_DATA_DIR` | DB・添付ファイル・API設定の保存先。`./api/data` |
+| `SIMPLYNOTE_DATA_DIR` | DB・添付ファイル・API設定の保存先。`./data` |
 | `TZ` | APIのタイムゾーン。`Asia/Tokyo` |
 | `ADMIN_USER` / `ADMIN_PASS` | API管理者。サンプルの値を運用する値へ変更 |
 | `ENABLE_API` / `ENABLE_DRIVE` | ログイン画面に表示する接続方法。どちらも `true` |
 
 イメージタグとホスト側ポートはComposeに直接記載する。
 配布用は既定で `latest` を使う。バージョンを固定する場合は、各サービスの `image` を
-`ghcr.io/iz69/simplynote-api:1.1.0` のように公開済みのタグへ変更する。
+`ghcr.io/iz69/simplynote-api:1.1.1` のように公開済みのタグへ変更する。
 ポートは両ComposeでUIが15173、APIが18888。変更する場合は `ports` を編集する。
 
 `UI_BASE_PATH` は `/` で始まり、末尾にも `/` を付ける。ルート配置は `/`。
@@ -101,6 +99,9 @@ docker compose -f docker-compose.develop.yml up -d --build
 ```
 
 既存環境から移行するときは、`.env` に現在と同じ管理者設定・公開パス・データ保存先を指定する。
+データ保存先の既定は `./data`。従来の `./api/data` を使い続ける場合は、
+`SIMPLYNOTE_DATA_DIR=./api/data` を指定する。APIを停止して `api/data` を `data` へ移動した場合は、
+`SIMPLYNOTE_DATA_DIR=./data` に変更する。
 ログイン画面の機能表示を `ui/config.json` で変更していた場合は、対応する
 `ENABLE_API`・`ENABLE_DRIVE` にその値を移す。
 API側の `/data/config.json` はDB・添付ファイルとともに継続利用する。
@@ -141,16 +142,16 @@ services:
 ## メンテナーの公開手順
 
 [container-images.yml](../.github/workflows/container-images.yml) はPR・mainへのpush・手動実行で
-UI/APIイメージをビルドし、テストする。`v1.1.0` などのバージョンタグのpushでは、
+UI/APIイメージをビルドし、テストする。`v1.1.1` などのバージョンタグのpushでは、
 両イメージの検証成功後にGHCRへ公開する。
 
 ```sh
 # 変更をGitHubへ反映した後、未使用のバージョンタグを公開
-git tag v1.1.0
-git push origin v1.1.0
+git tag v1.1.1
+git push origin v1.1.1
 ```
 
-`v1.1.0` はイメージの `1.1.0` タグになる。安定版には `latest`、コミット識別用には
+`v1.1.1` はイメージの `1.1.1` タグになる。安定版には `latest`、コミット識別用には
 `sha-...` も付く。プレリリースは `latest` を更新しない。
 初回公開後は、GitHubのPackages設定で両パッケージのVisibilityを `Public` にする。
 GitHub Actionsの `GITHUB_TOKEN` で公開でき、Publicなイメージは利用者が匿名でpullできる。

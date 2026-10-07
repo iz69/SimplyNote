@@ -13,7 +13,7 @@ services:
       ADMIN_PASS: ${ADMIN_PASS:-password}
       BASE_PATH: ${API_BASE_PATH:-/simplynote-api}
     volumes:
-      - ${SIMPLYNOTE_DATA_DIR:-./api/data}:/data
+      - ${SIMPLYNOTE_DATA_DIR:-./data}:/data
     mem_limit: 256m
 
   ui:

@@ -25,7 +25,6 @@ I wanted a Simplenote-like experience where I truly own my data. SimplyNote allo
 
 `docker-compose.yml` はGHCRの公開イメージを使用し、利用者側でのビルドは不要です。
 公開パスはコンテナ起動時に設定するため、`/` や複数階層のサブパスでも同じイメージを使えます。
-初回のイメージ公開までは、ソースビルド用の `docker-compose.develop.yml` を使用してください。
 
 | ファイル | 用途 |
 | --- | --- |
@@ -48,7 +47,7 @@ docker compose -f docker-compose.develop.yml up -d --build
 
 既定の公開パスはUIが `/simplynote/`、APIが `/simplynote-api`、
 ホスト側ポートはそれぞれ15173・18888です。ホストの127.0.0.1へ公開します。
-既存のDB・添付ファイル・API設定は、従来と同じ `./api/data:/data` を使います。
+DB・添付ファイル・API設定は、既定で `./data:/data` に保存します。
 導入・プロキシ設定・既存環境からの移行・イメージ公開の詳細は
 [Dockerイメージ配布](docs/container-distribution.md) を参照してください。
 
