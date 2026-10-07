@@ -21,6 +21,37 @@ I wanted a Simplenote-like experience where I truly own my data. SimplyNote allo
 - **Recommended Proxy**: Nginx (via `proxy_pass`)
 - **Security Note**: Designed to be used within a **VPN** or behind strict web access controls.
 
+## Docker配布と起動
+
+`docker-compose.yml` はGHCRの公開イメージを使用し、利用者側でのビルドは不要です。
+公開パスはコンテナ起動時に設定するため、`/` や複数階層のサブパスでも同じイメージを使えます。
+初回のイメージ公開までは、ソースビルド用の `docker-compose.develop.yml` を使用してください。
+
+| ファイル | 用途 |
+| --- | --- |
+| `docker-compose.yml` | 公開イメージから起動 |
+| `docker-compose.develop.yml` | 手元のソースをビルドして起動 |
+| `.env.example` | 両構成で使う設定のサンプル。`.env` にコピーして編集 |
+
+```sh
+cp .env.example .env
+# .env の管理者設定・公開パス・保存先を編集
+docker compose pull
+docker compose up -d
+```
+
+ソースからビルドする場合:
+
+```sh
+docker compose -f docker-compose.develop.yml up -d --build
+```
+
+既定の公開パスはUIが `/simplynote/`、APIが `/simplynote-api`、
+ホスト側ポートはそれぞれ15173・18888です。ホストの127.0.0.1へ公開します。
+既存のDB・添付ファイル・API設定は、従来と同じ `./api/data:/data` を使います。
+導入・プロキシ設定・既存環境からの移行・イメージ公開の詳細は
+[Dockerイメージ配布](docs/container-distribution.md) を参照してください。
+
 **WebUI**<br/>
 <img width="202" height="333" alt="image" src="https://github.com/user-attachments/assets/090f2537-3617-44ea-91de-bf931aa4ac33" />
 <img width="608" height="373" alt="Screenshot_web_20260124-091209" src="https://github.com/user-attachments/assets/dcf7a4c4-adf8-4846-a8fd-86894b112c00" />

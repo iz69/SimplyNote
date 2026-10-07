@@ -1,6 +1,9 @@
 data/
 compose.yml
-docker-compose-develop.yml
+.env
+.env.*
+!.env.example
+docker-compose.override.yml
 
 ui/public/config.json
 

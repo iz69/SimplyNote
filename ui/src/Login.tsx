@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { basePath, apiUrl } from './utils'
+import { basePath, apiUrl, defaultApiBaseUrl } from './utils'
 import { clearDataSource } from './dataSource'
 import {
   generateAuthUrl,
@@ -16,7 +16,7 @@ export default function Login() {
 
   const [username, setUsername] = useState(localStorage.getItem("username") || "");
   const [password, setPassword] = useState("");
-  const [apiBaseUrl, setApiBaseUrl] = useState(localStorage.getItem("api_base_url") || "");
+  const [apiBaseUrl, setApiBaseUrl] = useState(localStorage.getItem("api_base_url") || defaultApiBaseUrl() || "/");
   const [error, setError] = useState("");
   const [enableApi, setEnableApi] = useState(true);
   const [enableDrive, setEnableDrive] = useState(true);

@@ -1,14 +1,14 @@
 export function basePath() {
-  const path = window.location.pathname
-//  if (path.endsWith("/")) return path
-//  return path.replace(/[^/]+$/, "");
-  const dir = path.replace(/[^/]+$/, "")
-  return dir.replace(/\/+$/, "")
+  const base = window.__SIMPLYNOTE_CONFIG__?.uiBasePath ?? document.baseURI;
+  return new URL(base, window.location.origin).pathname.replace(/\/+$/, "");
 }
 
-export function apiUrl( path: string ) {
-  const base = (localStorage.getItem("api_base_url") || "/simplynote-api").replace(/\/$/, "");
-  const tail = '/' + path.replace(/^\/+/, '')
+export function defaultApiBaseUrl() {
+  return window.__SIMPLYNOTE_CONFIG__?.apiBasePath ?? "/simplynote-api";
+}
 
-  return `${base}${tail}`
+export function apiUrl(path: string) {
+  const base = (localStorage.getItem("api_base_url") || defaultApiBaseUrl()).replace(/\/+$/, "");
+  const tail = '/' + path.replace(/^\/+/, '');
+  return `${base}${tail}`;
 }

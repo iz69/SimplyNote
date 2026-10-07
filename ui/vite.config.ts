@@ -2,7 +2,7 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
 
   const env = loadEnv(mode, process.cwd(), '')
   const hostName = env.VITE_HOST_NAME || 'localhost'
@@ -10,8 +10,8 @@ export default defineConfig(({ mode }) => {
   const basePath = env.VITE_BASE_PATH || '/'
 
   return {
-//    base: '/',
-    base: basePath,
+    // Production paths are supplied by the container at startup.
+    base: command === 'build' ? './' : basePath,
     publicDir: 'public',
     plugins: [react()],
 
@@ -36,4 +36,3 @@ export default defineConfig(({ mode }) => {
     }
   }
 })
-

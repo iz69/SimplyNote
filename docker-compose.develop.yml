@@ -1,9 +1,10 @@
-# Published images; source builds use docker-compose.develop.yml.
+# Standalone source-build configuration; uses the same .env as distribution.
 
 services:
   api:
     container_name: simplynote-api
-    image: ghcr.io/iz69/simplynote-api:latest
+    image: simplynote-api:develop
+    build: ./api
     ports:
       - "127.0.0.1:18888:8000"
     restart: unless-stopped
@@ -18,7 +19,8 @@ services:
 
   ui:
     container_name: simplynote-ui
-    image: ghcr.io/iz69/simplynote-ui:latest
+    image: simplynote-ui:develop
+    build: ./ui
     ports:
       - "127.0.0.1:15173:5173"
     restart: unless-stopped

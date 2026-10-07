@@ -1,19 +1,21 @@
-FROM node:20 AS build
+FROM node:22-alpine AS build
 WORKDIR /ui
 
-ARG VITE_HOST_NAME=www.sample.com
-ENV VITE_HOST_NAME=$VITE_HOST_NAME
-
-ARG VITE_BASE_PATH=/
-ENV VITE_BASE_PATH=$VITE_BASE_PATH
-
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 COPY . .
 RUN npm run build
 
 FROM nginx:stable-alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /ui/dist /usr/share/nginx/html
+LABEL org.opencontainers.image.source="https://github.com/iz69/SimplyNote"
+ENV UI_BASE_PATH=/simplynote/ \
+    API_BASE_PATH=/simplynote-api \
+    ENABLE_API=true \
+    ENABLE_DRIVE=true
+
+RUN apk add --no-cache python3
+COPY --from=build /ui/dist /opt/simplynote/dist
+COPY runtime/generate_config.py /opt/simplynote/generate_config.py
+COPY docker-entrypoint.d/40-simplynote-runtime.sh /docker-entrypoint.d/40-simplynote-runtime.sh
+RUN chmod +x /docker-entrypoint.d/40-simplynote-runtime.sh
 EXPOSE 5173
-CMD ["nginx", "-g", "daemon off;"]

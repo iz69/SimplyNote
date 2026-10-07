@@ -1,0 +1,107 @@
+name: Container images
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: container-images-${{ startsWith(github.ref, 'refs/tags/v') && 'releases' || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Check configuration and runtime generation
+        working-directory: ui
+        run: |
+          docker compose -f ../docker-compose.yml config --quiet
+          docker compose -f ../docker-compose.develop.yml config --quiet
+          npm ci
+          npm run test:runtime
+          node node_modules/playwright-core/cli.js install --with-deps chromium
+          node --input-type=module -e 'import {chromium} from "playwright-core"; console.log("BROWSER_EXECUTABLE=" + chromium.executablePath())' >> "$GITHUB_ENV"
+      - uses: docker/build-push-action@3b5e8027fcad23fda98b2e3ac259d8d67585f671 # v6
+        with:
+          context: ui
+          platforms: linux/amd64
+          load: true
+          tags: simplynote-ui:distribution-test
+          cache-from: type=gha,scope=ui
+          cache-to: type=gha,mode=max,scope=ui
+      - name: Check the same image at multiple public paths
+        working-directory: ui
+        run: npm run test:container
+
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/build-push-action@3b5e8027fcad23fda98b2e3ac259d8d67585f671 # v6
+        with:
+          context: api
+          platforms: linux/amd64
+          load: true
+          tags: simplynote-api:distribution-test
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+      - name: Check API startup and storage
+        run: |
+          docker run --rm --network none --tmpfs /data \
+            -v "$PWD/api/tests/container_smoke.py:/smoke.py:ro" \
+            -e BASE_PATH=/tools/notes-api -e ADMIN_USER=smoke-user -e ADMIN_PASS=smoke-password \
+            --entrypoint python simplynote-api:distribution-test -B /smoke.py
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ui, api]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [ui, api]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Set image name
+        env:
+          OWNER: ${{ github.repository_owner }}
+          SERVICE: ${{ matrix.service }}
+        run: echo "IMAGE=ghcr.io/${OWNER,,}/simplynote-$SERVICE" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7 # v5
+        id: metadata
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha
+      - uses: docker/build-push-action@3b5e8027fcad23fda98b2e3ac259d8d67585f671 # v6
+        with:
+          context: ${{ matrix.service }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
