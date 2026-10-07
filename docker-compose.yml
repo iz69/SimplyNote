@@ -3,7 +3,7 @@ services:
   api:
     container_name: simplynote-api
     ports:
-      - "18888:8000"
+      - "127.0.0.1:18888:8000"
     restart: unless-stopped
     environment:
       TZ: Asia/Tokyo
@@ -14,11 +14,12 @@ services:
     build: ./api
     volumes:
       - ./api/data:/data
+    mem_limit: 256m
 
   ui:
     container_name: simplynote-ui
     ports:
-      - "15173:5173"
+      - "127.0.0.1:15173:5173"
     restart: unless-stopped
     build:
       context: ./ui
@@ -27,4 +28,4 @@ services:
         VITE_BASE_PATH: /simplynote/
     volumes:
       - ./ui/config.json:/usr/share/nginx/html/config.json:ro
-
+    mem_limit: 256m
