@@ -29,8 +29,7 @@ I wanted a Simplenote-like experience where I truly own my data. SimplyNote allo
 | ファイル | 用途 |
 | --- | --- |
 | `docker-compose.yml` | 公開イメージから起動 |
-| `docker-compose.develop.yml` | 手元のソースをビルドして起動 |
-| `.env.example` | 両構成で使う設定のサンプル。`.env` にコピーして編集 |
+| `.env.example` | 設定のサンプル。`.env` にコピーして編集 |
 
 ```sh
 cp .env.example .env
@@ -39,17 +38,13 @@ docker compose pull
 docker compose up -d
 ```
 
-ソースからビルドする場合:
-
-```sh
-docker compose -f docker-compose.develop.yml up -d --build
-```
-
 既定の公開パスはUIが `/simplynote/`、APIが `/simplynote-api`、
 ホスト側ポートはそれぞれ15173・18888です。ホストの127.0.0.1へ公開します。
 DB・添付ファイル・API設定は、既定で `./data:/data` に保存します。
-導入・プロキシ設定・既存環境からの移行・イメージ公開の詳細は
-[Dockerイメージ配布](docs/container-distribution.md) を参照してください。
+導入・nginx設定・更新・バックアップの詳細は
+[Dockerでの導入・運用](docs/container-distribution.md) を参照してください。
+ソースビルド・イメージ公開・テストは
+[コンテナの開発・公開](docs/container-development.md) にまとめています。
 
 **WebUI**<br/>
 <img width="202" height="333" alt="image" src="https://github.com/user-attachments/assets/090f2537-3617-44ea-91de-bf931aa4ac33" />
